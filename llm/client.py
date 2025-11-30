@@ -177,6 +177,44 @@ class LLMClient:
                 self.logger.info("Tenant key manager initialized")
         return self._tenant_key_manager
     
+    async def generate(
+        self,
+        prompt: str,
+        tenant_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """
+        Generate text from a prompt (convenience method)
+        
+        Args:
+            prompt: Text prompt
+            tenant_id: Tenant ID for rate limiting and cost tracking
+            user_id: User ID for rate limiting and cost tracking
+            temperature: Override default temperature
+            max_tokens: Override default max_tokens
+            **kwargs: Additional provider-specific parameters
+        
+        Returns:
+            Generated text content
+        
+        Raises:
+            RateLimitExceeded: If rate limit exceeded
+            LLMError: If LLM call fails after retries
+        """
+        messages = [{"role": "user", "content": prompt}]
+        response = await self.chat_completion(
+            messages=messages,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        return response.content
+    
     async def chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -398,3 +436,29 @@ async def create_llm_client(config_file: Optional[str] = None) -> LLMClient:
         config = LLMConfig()
     
     return LLMClient(config)
+
+
+# Global LLM client instance (singleton pattern)
+_global_llm_client: Optional[LLMClient] = None
+
+
+def get_llm_client() -> LLMClient:
+    """
+    Get or create the global LLM client instance (singleton)
+    
+    Returns:
+        Global LLMClient instance
+    
+    Example:
+        client = get_llm_client()
+        response = await client.chat_completion(
+            messages=[{"role": "user", "content": "Hello!"}]
+        )
+    """
+    global _global_llm_client
+    
+    if _global_llm_client is None:
+        config = LLMConfig()
+        _global_llm_client = LLMClient(config)
+    
+    return _global_llm_client

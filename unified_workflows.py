@@ -24,9 +24,6 @@ from datetime import datetime, timedelta
 from temporalio import workflow, activity
 from temporalio.common import RetryPolicy
 
-# Import only types needed for function signatures (no runtime imports)
-from agent_governance import PrivilegeLevel, ActionType
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -263,16 +260,9 @@ async def get_timesheet_data(request: TimesheetReminderRequest) -> Dict[str, Any
 
 @activity.defn
 @opik_trace("send_sms_reminder")
-async def send_sms_reminder(phone_number: str, message: str, user_name: str, agent_id: str = "sms_agent", agent_privilege: PrivilegeLevel = PrivilegeLevel.LIMITED_WRITE) -> Dict[str, Any]:
+async def send_sms_reminder(phone_number: str, message: str, user_name: str, agent_id: str = "sms_agent") -> Dict[str, Any]:
     """Send SMS reminder using Twilio"""
     try:
-        # Import timeout wrapper and governance inside activity to avoid workflow sandbox restrictions
-        from timeout_wrapper import twilio_timeout
-        from agent_governance import limited_write_tool, ActionType, PrivilegeLevel
-        
-        # Apply governance check
-        governance_check = limited_write_tool(ActionType.SEND_MESSAGE)
-        
         # Import Twilio inside activity to avoid workflow sandbox restrictions
         from twilio.rest import Client
         
@@ -314,6 +304,51 @@ async def send_sms_reminder(phone_number: str, message: str, user_name: str, age
             'status': 'error',
             'error': str(e),
             'timestamp': datetime.utcnow().isoformat()  # FIXED: Use UTC time in activities
+        }
+
+@activity.defn
+@opik_trace("send_sms_response")
+async def send_sms_response_activity(to_number: str, message: str, request_id: str) -> Dict[str, Any]:
+    """Send SMS response via Twilio API (for async webhook pattern)"""
+    try:
+        # Import Twilio inside activity to avoid workflow sandbox restrictions
+        from twilio.rest import Client
+        
+        # Get Twilio credentials from environment
+        account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+        auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+        from_number = os.getenv('TWILIO_PHONE_NUMBER')
+        
+        logger.info(f"📤 Sending SMS response to {to_number}")
+        
+        if not all([account_sid, auth_token, from_number]):
+            raise Exception(f"Missing Twilio credentials")
+        
+        # Create Twilio client
+        client = Client(account_sid, auth_token)
+        
+        # Send SMS
+        sms_message = client.messages.create(
+            body=message,
+            from_=from_number,
+            to=to_number
+        )
+        
+        logger.info(f"✅ SMS response sent: {sms_message.sid}")
+        
+        return {
+            'success': True,
+            'message_sid': sms_message.sid,
+            'status': sms_message.status,
+            'request_id': request_id
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to send SMS response: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'request_id': request_id
         }
 
 @activity.defn
@@ -544,7 +579,7 @@ class DailyReminderScheduleWorkflow:
 # =============================================================================
 
 @activity.defn
-async def load_conversation_history(user_id: str, limit: int = 5, agent_id: str = "conversation_agent", agent_privilege: PrivilegeLevel = PrivilegeLevel.LIMITED_WRITE) -> List[Dict[str, Any]]:
+async def load_conversation_history(user_id: str, limit: int = 5, agent_id: str = "conversation_agent") -> List[Dict[str, Any]]:
     """Load conversation history from Supabase with timeout protection"""
     logger.info(f"Loading conversation history for {user_id} (limit: {limit})")
     
@@ -589,46 +624,81 @@ async def call_harvest_mcp_tool(tool_name: str, payload: Dict[str, Any]) -> Dict
     
     def _harvest_http_call(tool_name: str, payload: Dict[str, Any]):
         """Make HTTP call to Harvest MCP with timeout protection"""
+        logger.info(f"🔧 [HTTP] _harvest_http_call started for tool: {tool_name}")
+        logger.info(f"🔧 [HTTP] Payload keys: {list(payload.keys())}")
+        logger.info(f"🔧 [HTTP] harvest_account in payload: {payload.get('harvest_account')}")
+        logger.info(f"🔧 [HTTP] harvest_token present: {bool(payload.get('harvest_token'))}")
+        logger.info(f"🔧 [HTTP] harvest_token length: {len(str(payload.get('harvest_token'))) if payload.get('harvest_token') else 0}")
+        
         # Import timeout functions inside activity to avoid sandbox restrictions
         from timeout_wrapper import create_requests_session, APITimeoutConfig
         
         # Create session with timeout configuration
         session = create_requests_session(timeout=APITimeoutConfig.HARVEST_MCP_TIMEOUT)
+        logger.info(f"🔧 [HTTP] Session created with timeout: {APITimeoutConfig.HARVEST_MCP_TIMEOUT}s")
         
         # SMART ROUTING: Direct internal calls, KrakenD for external
-        use_direct_internal = os.getenv('USE_DIRECT_INTERNAL_CALLS', 'true').lower() == 'true'
+        use_direct_internal_env = os.getenv('USE_DIRECT_INTERNAL_CALLS', 'true')
+        use_direct_internal = use_direct_internal_env.lower() == 'true'
+        logger.info(f"🔧 [HTTP] USE_DIRECT_INTERNAL_CALLS env: '{use_direct_internal_env}' -> {use_direct_internal}")
         
         if use_direct_internal:
             # Direct internal call to MCP server (FASTER, MORE RELIABLE)
             harvest_mcp_url = os.getenv('HARVEST_MCP_INTERNAL_URL', 'http://harvest-mcp.internal.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io')
             url = f"{harvest_mcp_url}/api/{tool_name}"
             logger.info(f"🔗 Direct internal MCP call: {tool_name}")
+            logger.info(f"🔗 URL: {url}")
         else:
             # External call via KrakenD Gateway (for external traffic)
             krakend_url = os.getenv('KRAKEND_GATEWAY_URL', 'https://krakend-gateway.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io')
             url = f"{krakend_url}/harvest/api/{tool_name}"
             logger.info(f"🌐 External MCP call via KrakenD: {tool_name}")
+            logger.info(f"🌐 URL: {url}")
         
         try:
+            logger.info(f"📤 [HTTP] Sending POST request to {url}")
             response = session.post(url, json=payload)
+            logger.info(f"📥 [HTTP] Response status: {response.status_code}")
+            logger.info(f"📥 [HTTP] Response headers: {dict(response.headers)}")
+            
             response.raise_for_status()  # Raises exception for bad status codes
             
-            return response.json()
+            result = response.json()
+            logger.info(f"✅ [HTTP] Response parsed successfully, keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
+            return result
             
         except Exception as e:
             logger.error(f"❌ Harvest MCP HTTP call failed ({tool_name}): {e}")
+            logger.error(f"❌ Exception type: {type(e).__name__}")
+            if hasattr(e, 'response'):
+                logger.error(f"❌ Response status: {e.response.status_code if hasattr(e.response, 'status_code') else 'N/A'}")
+                logger.error(f"❌ Response body: {e.response.text[:500] if hasattr(e.response, 'text') else 'N/A'}")
             raise
         finally:
             session.close()
+            logger.info(f"🔧 [HTTP] Session closed")
     
     # Execute the call (timeout wrapper will handle the timeout)
     return _make_harvest_call()
 
+
+# =============================================================================
+# LEGACY SINGLE-AGENT FORMATTERS (Used by timesheet reminders only)
+# =============================================================================
+# NOTE: These formatters are ONLY used by TimesheetReminderWorkflow.
+# The multi-agent conversation system uses the Branding Agent instead.
+# DO NOT use these in multi-agent workflows - they return formatted strings,
+# not structured data.
+# =============================================================================
+
 def format_check_timesheet_message(data: dict, message_type: str = "check") -> str:
     """
-    SPECIFIC FORMATTER FOR SEARCH_MY_TIMESHEET TOOL ONLY
-    Creates beautifully formatted timesheet messages with emojis and structure
-    Used by: search_my_timesheet tool, timesheet reminders, error messages
+    [LEGACY] Formatter for timesheet reminder messages.
+    
+    Used by: TimesheetReminderWorkflow ONLY
+    NOT used by: Multi-agent conversation system (uses Branding Agent)
+    
+    Creates beautifully formatted timesheet messages with emojis and structure.
     
     Args:
         data: Dictionary containing timesheet data
@@ -729,8 +799,27 @@ def format_check_timesheet_message(data: dict, message_type: str = "check") -> s
         logger.error(f"❌ Formatter error: {e}")
         return f"📊 Timesheet for {data.get('user_name', 'User')}: {data.get('total_hours', 0)}h logged this week"
 
+# =============================================================================
+# LEGACY SINGLE-AGENT LANGCHAIN TOOLS (Used by timesheet reminders only)
+# =============================================================================
+# NOTE: These LangChain tools are ONLY used by TimesheetReminderWorkflow.
+# They return FORMATTED STRINGS for direct user consumption.
+# 
+# The multi-agent conversation system uses HarvestMCPWrapper instead,
+# which returns STRUCTURED DATA for agent-to-agent communication.
+# 
+# DO NOT use these tools in multi-agent workflows!
+# =============================================================================
+
 def create_harvest_tools(user_id: str):
-    """Create LangChain tools for Harvest MCP integration"""
+    """
+    [LEGACY] Create LangChain tools for Harvest MCP integration.
+    
+    Used by: TimesheetReminderWorkflow ONLY
+    NOT used by: Multi-agent conversation system (uses HarvestMCPWrapper)
+    
+    Returns: List of LangChain tools that return formatted strings
+    """
     from langchain_core.tools import tool
     from datetime import datetime, timedelta
     
@@ -2492,9 +2581,19 @@ def create_harvest_tools(user_id: str):
         create_time_entry_via_start_end, delete_time_entry_external_reference
     ]
 
+# =============================================================================
+# REMOVED: Single-agent conversation activities (REPLACED by multi-agent system)
+# The following activities have been removed:
+# - generate_ai_response_with_langchain (replaced by multi-agent workflow)
+# - store_conversation (kept for backward compatibility with timesheet reminders)
+# - log_conversation_metrics (kept for metrics)
+# - send_email_response (kept for email sending)
+# - send_whatsapp_response (kept for WhatsApp sending)
+# - send_platform_response (kept for platform routing)
+# =============================================================================
+
 @activity.defn
-@opik_trace("generate_ai_response_with_langchain")
-async def generate_ai_response_with_langchain(request: ConversationRequest) -> AIResponse:
+async def store_conversation_legacy(user_id: str, message: str, response: str, platform: str, conversation_id: str, metadata: Optional[Dict[str, Any]] = None, agent_id: str = "conversation_agent") -> Dict[str, Any]:
     """Generate AI response using centralized LLM Client with Harvest MCP tools and all best practices"""
     try:
         # Import inside activity to avoid Temporal sandbox restrictions
@@ -2862,7 +2961,7 @@ Remember: You have 51 tools across 11 categories. Each does ONE thing. Use the r
         )
 
 @activity.defn
-async def store_conversation(user_id: str, message: str, response: str, platform: str, conversation_id: str, metadata: Optional[Dict[str, Any]] = None, agent_id: str = "conversation_agent", agent_privilege: PrivilegeLevel = PrivilegeLevel.LIMITED_WRITE) -> Dict[str, Any]:
+async def store_conversation(user_id: str, message: str, response: str, platform: str, conversation_id: str, metadata: Optional[Dict[str, Any]] = None, agent_id: str = "conversation_agent") -> Dict[str, Any]:
     """Store conversation in Supabase (FIXED: Correct schema with INBOUND/OUTBOUND records)"""
     try:
         if not worker.supabase_client:
@@ -3103,106 +3202,623 @@ async def send_platform_response(platform: str, response_text: str, user_contact
         }
 
 # =============================================================================
-# CONVERSATION WORKFLOWS (from conversation_workflows.py)
+# REMOVED: Single-agent conversation workflows (REPLACED by multi-agent system)
+# - ConversationWorkflow (replaced by MultiAgentConversationWorkflow)
+# - CrossPlatformRoutingWorkflow (no longer needed)
+# =============================================================================
+
+# =============================================================================
+# MULTI-AGENT SYSTEM ACTIVITIES (Feature: 001-multi-agent-architecture)
+# =============================================================================
+
+@activity.defn
+async def get_user_credentials_activity(user_id: str) -> Dict[str, Any]:
+    """Activity: Fetch user credentials from Supabase"""
+    logger.info(f"🔐 [Activity] get_user_credentials_activity started for user: {user_id}")
+    
+    try:
+        logger.info(f"🔍 Supabase client available: {worker.supabase_client is not None}")
+        
+        if worker.supabase_client:
+            # Query user credentials from Supabase
+            logger.info(f"🔍 Querying Supabase for user: {user_id}")
+            user_profile = worker.supabase_client.table('users').select(
+                'id,harvest_account_id,harvest_access_token,harvest_user_id,timezone'
+            ).eq('id', user_id).execute()
+            
+            logger.info(f"🔍 Supabase query returned {len(user_profile.data) if user_profile.data else 0} results")
+            
+            if user_profile.data:
+                user_data = user_profile.data[0]
+                credentials = {
+                    'harvest_account_id': user_data.get('harvest_account_id'),
+                    'harvest_access_token': user_data.get('harvest_access_token'),
+                    'harvest_user_id': user_data.get('harvest_user_id'),
+                    'timezone': user_data.get('timezone', 'UTC')
+                }
+                logger.info(f"✅ [Activity] Retrieved credentials for user: {user_id}")
+                logger.info(f"🔐 [Credentials] harvest_account_id: {credentials['harvest_account_id']}")
+                logger.info(f"🔐 [Credentials] harvest_access_token first 20 chars: {str(credentials['harvest_access_token'])[:20]}...")
+                logger.info(f"🔐 [Credentials] harvest_access_token length: {len(str(credentials['harvest_access_token']))}")
+                logger.info(f"🔐 [Credentials] harvest_user_id: {credentials['harvest_user_id']}")
+                logger.info(f"🔐 [Credentials] timezone: {credentials['timezone']}")
+                return credentials
+            else:
+                logger.error(f"❌ User {user_id} not found in Supabase users table")
+                raise Exception(f"User {user_id} not found in database")
+        else:
+            logger.error("❌ Supabase client not available in worker")
+            raise Exception("Supabase client not available")
+    except Exception as e:
+        logger.error(f"❌ [Activity] Failed to get credentials: {str(e)}")
+        raise
+
+
+@activity.defn
+async def planner_analyze_activity(
+    request_id: str,
+    user_message: str,
+    channel: str,
+    conversation_history: List[Dict],
+    user_context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Activity: Planner analyzes request and creates execution plan + scorecard"""
+    logger.info(f"📝 [Activity] planner_analyze_activity started: {request_id}")
+    logger.info(f"  Input: message='{user_message[:50]}...', channel={channel}")
+    
+    from llm.client import get_llm_client
+    from agents.planner import PlannerAgent
+    
+    llm_client = get_llm_client()
+    planner = PlannerAgent(llm_client)
+    
+    result = await planner.analyze_request(
+        request_id, user_message, channel, conversation_history, user_context
+    )
+    
+    logger.info(f"✅ [Activity] planner_analyze_activity completed: {request_id}")
+    return result
+
+
+@activity.defn
+async def timesheet_execute_activity(
+    request_id: str,
+    planner_message: str,
+    user_context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Activity: Timesheet Agent executes based on Planner's natural language message.
+    
+    NO hardcoded logic - Timesheet Agent uses LLM to decide which tool to call.
+    """
+    from llm.client import get_llm_client
+    from agents.timesheet import TimesheetAgent
+    import json
+    
+    logger.info(f"📊 [Activity] timesheet_execute_activity started: {request_id}")
+    logger.info(f"📨 [Activity] Planner's message: '{planner_message}'")
+    
+    llm_client = get_llm_client()
+    
+    # Create simple Harvest tools wrapper
+    # Timesheet Agent will use LLM to decide which tool to call
+    class HarvestToolsWrapper:
+        """Wrapper providing access to Harvest MCP tools"""
+        
+        def __init__(self, credentials, timezone):
+            self.credentials = credentials
+            self.timezone = timezone
+            self.harvest_account = credentials.get('harvest_account_id')
+            self.harvest_token = credentials.get('harvest_access_token')
+            self.harvest_user_id = credentials.get('harvest_user_id')
+        
+        async def list_time_entries(self, from_date, to_date, **kwargs):
+            """Get time entries for a date range"""
+            logger.info(f"📊 [HarvestTools] list_time_entries called")
+            logger.info(f"📊 [HarvestTools] from_date: {from_date}, to_date: {to_date}")
+            logger.info(f"📊 [HarvestTools] harvest_account: {self.harvest_account}")
+            logger.info(f"📊 [HarvestTools] harvest_token present: {bool(self.harvest_token)}")
+            logger.info(f"📊 [HarvestTools] harvest_token first 20 chars: {str(self.harvest_token)[:20] if self.harvest_token else 'None'}...")
+            logger.info(f"📊 [HarvestTools] harvest_token length: {len(str(self.harvest_token)) if self.harvest_token else 0}")
+            logger.info(f"📊 [HarvestTools] harvest_user_id: {self.harvest_user_id}")
+            
+            payload = {
+                "harvest_account": self.harvest_account,
+                "harvest_token": self.harvest_token,
+                "from_date": from_date,
+                "to_date": to_date,
+                "user_id": self.harvest_user_id
+            }
+            logger.info(f"📊 [HarvestTools] Payload created with keys: {list(payload.keys())}")
+            logger.info(f"📊 [HarvestTools] Calling call_harvest_mcp_tool...")
+            result = await call_harvest_mcp_tool("list_time_entries", payload)
+            logger.info(f"📊 [HarvestTools] call_harvest_mcp_tool returned, result type: {type(result)}")
+            return result
+        
+        async def list_projects(self, **kwargs):
+            """Get all projects"""
+            payload = {
+                "harvest_account": self.harvest_account,
+                "harvest_token": self.harvest_token,
+                "user_id": self.harvest_user_id
+            }
+            result = await call_harvest_mcp_tool("list_projects", payload)
+            return result
+        
+        async def get_current_user(self, **kwargs):
+            """Get current user info"""
+            payload = {
+                "harvest_account": self.harvest_account,
+                "harvest_token": self.harvest_token
+            }
+            result = await call_harvest_mcp_tool("get_current_user", payload)
+            return result
+    
+    logger.info(f"🏗️ [Activity] Creating HarvestToolsWrapper...")
+    logger.info(f"🏗️ [Activity] user_context keys: {list(user_context.keys())}")
+    logger.info(f"🏗️ [Activity] credentials present in user_context: {bool(user_context.get('credentials'))}")
+    if user_context.get('credentials'):
+        logger.info(f"🏗️ [Activity] credentials keys: {list(user_context.get('credentials').keys())}")
+    
+    harvest_tools = HarvestToolsWrapper(
+        user_context.get('credentials', {}),
+        user_context.get('timezone', 'UTC')
+    )
+    logger.info(f"✅ [Activity] HarvestToolsWrapper created")
+    
+    logger.info(f"🤖 [Activity] Creating TimesheetAgent...")
+    timesheet = TimesheetAgent(llm_client, harvest_tools)
+    logger.info(f"✅ [Activity] TimesheetAgent created")
+    
+    # Execute with natural language instruction
+    logger.info(f"▶️ [Activity] Executing timesheet.execute with message: '{planner_message[:100]}'")
+    result = await timesheet.execute(request_id, planner_message, user_context)
+    logger.info(f"✅ [Activity] timesheet.execute completed with success: {result.get('success')}")
+    
+    logger.info(f"✅ [Activity] timesheet_execute_activity completed: {request_id}, success={result.get('success')}")
+    return result
+
+
+@activity.defn
+async def planner_compose_activity(
+    request_id: str,
+    user_message: str,
+    timesheet_data: Dict[str, Any],
+    conversation_history: List[Dict],
+    user_context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Activity: Planner composes response from data"""
+    logger.info(f" [Activity] planner_compose_activity started: {request_id}")
+    logger.info(f"  Input: has_timesheet_data={bool(timesheet_data)}")
+    
+    from llm.client import get_llm_client
+    from agents.planner import PlannerAgent
+    
+    llm_client = get_llm_client()
+    planner = PlannerAgent(llm_client)
+    
+    result = await planner.compose_response(
+        request_id, user_message, timesheet_data, conversation_history, user_context
+    )
+    
+    logger.info(f" [Activity] planner_compose_activity completed: {request_id}")
+    return result
+
+
+@activity.defn
+async def branding_format_activity(
+    request_id: str,
+    response: str,
+    channel: str,
+    user_context: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Activity: Branding Agent formats response for channel"""
+    logger.info(f" [Activity] branding_format_activity started: {request_id}")
+    logger.info(f"  Input: channel={channel}, response_length={len(response)}")
+    
+    from llm.client import get_llm_client
+    from agents.branding import BrandingAgent
+    
+    llm_client = get_llm_client()
+    branding = BrandingAgent(llm_client)
+    
+    result = await branding.format_for_channel(request_id, response, channel, user_context)
+    
+    logger.info(f" [Activity] branding_format_activity completed: {request_id}")
+    return result
+
+
+@activity.defn
+async def quality_validate_activity(
+    request_id: str,
+    response: str,
+    scorecard: Dict[str, Any],
+    channel: str,
+    original_question: str
+) -> Dict[str, Any]:
+    """Activity: Quality Agent validates response"""
+    logger.info(f" [Activity] quality_validate_activity started: {request_id}")
+    logger.info(f"  Input: response_length={len(response)}, criteria_count={len(scorecard.get('criteria', []))}")
+    
+    from llm.client import get_llm_client
+    from agents.quality import QualityAgent
+    
+    llm_client = get_llm_client()
+    quality = QualityAgent(llm_client)
+    
+    result = await quality.validate_response(
+        request_id, response, scorecard, channel, original_question
+    )
+    
+    passed = result.get('validation_result', {}).get('passed', False)
+    logger.info(f" [Activity] quality_validate_activity completed: {request_id}, passed={passed}")
+    return result
+
+
+@activity.defn
+async def planner_refine_activity(
+    request_id: str,
+    original_response: str,
+    failed_criteria: List[Dict],
+    attempt_number: int
+) -> Dict[str, Any]:
+    """Activity: Planner refines response based on quality feedback"""
+    logger.info(f"🔄 [Activity] planner_refine_activity started: {request_id} (attempt {attempt_number})")
+    logger.info(f"  Input: failed_criteria_count={len(failed_criteria)}")
+    
+    from llm.client import get_llm_client
+    from agents.planner import PlannerAgent
+    
+    llm_client = get_llm_client()
+    planner = PlannerAgent(llm_client)
+    
+    result = await planner.refine_response(
+        request_id, original_response, failed_criteria, attempt_number
+    )
+    
+    logger.info(f"✅ [Activity] planner_refine_activity completed: {request_id}")
+    return result
+
+
+@activity.defn
+async def planner_graceful_failure_activity(
+    request_id: str,
+    user_message: str,
+    failure_reason: str,
+    channel: str
+) -> Dict[str, Any]:
+    """Activity: Planner composes graceful failure message"""
+    from llm.client import get_llm_client
+    from agents.planner import PlannerAgent
+    
+    llm_client = get_llm_client()
+    planner = PlannerAgent(llm_client)
+    
+    return await planner.compose_graceful_failure(
+        request_id, user_message, failure_reason, channel
+    )
+
+
+@activity.defn
+async def quality_validate_graceful_failure_activity(
+    request_id: str,
+    failure_message: str,
+    failure_reason: str
+) -> Dict[str, Any]:
+    """Activity: Quality Agent validates graceful failure message"""
+    from llm.client import get_llm_client
+    from agents.quality import QualityAgent
+    
+    llm_client = get_llm_client()
+    quality = QualityAgent(llm_client)
+    
+    return await quality.validate_graceful_failure(
+        request_id, failure_message, failure_reason
+    )
+
+
+# =============================================================================
+# MULTI-AGENT CONVERSATION WORKFLOW
 # =============================================================================
 
 @workflow.defn
-class ConversationWorkflow:
-    """Handle cross-platform conversations with AI agent"""
+class MultiAgentConversationWorkflow:
+    """
+    Autonomous multi-agent conversation workflow.
+    
+    Philosophy:
+    - Agents communicate via natural language
+    - NO hardcoded orchestration or query types
+    - Workflow is just a message router
+    - All decisions made by LLM prompts
+    
+    Flow:
+    1. Planner analyzes request → decides if it needs data + creates message to Timesheet
+    2. If needed: Route Planner's message to Timesheet Agent
+    3. Timesheet uses LLM to decide which tool to call
+    4. Planner composes response from data
+    5. Branding formats for channel
+    6. Quality validates against scorecard
+    7. If validation fails: refine once → reformat → revalidate
+    8. Send final response
+    """
     
     @workflow.run
-    @opik_trace("conversation_workflow")
-    async def run(self, request: ConversationRequest) -> AIResponse:
-        """Execute conversation workflow"""
-        try:
-            logger.info(f"🚀 Starting conversation for {request.user_id} via {request.platform}")
-            
-            # Step 1: Generate AI response using LangChain agent with tools
-            ai_response = await workflow.execute_activity(
-                generate_ai_response_with_langchain,
-                request,
-                start_to_close_timeout=timedelta(seconds=120),  # Longer timeout for AI processing
-                retry_policy=RetryPolicy(maximum_attempts=2)
-            )
-            
-            # Step 2: Store conversation in database
-            storage_result = await workflow.execute_activity(
-                store_conversation,
-                args=[
-                    request.user_id,
-                    request.message,
-                    ai_response.response,
-                    request.platform,
-                    ai_response.conversation_id,
-                    request.metadata  # Pass metadata for schema compliance
-                ],
-                start_to_close_timeout=timedelta(seconds=30),
-                retry_policy=RetryPolicy(maximum_attempts=2)
-            )
-            
-            # Log custom metrics for monitoring
-            await workflow.execute_activity(
-                log_conversation_metrics,
-                args=[
-                    request.platform,
-                    len(request.message),
-                    len(ai_response.response) if ai_response.response else 0
-                ],
-                start_to_close_timeout=timedelta(seconds=10)
-            )
-            
-            # Step 3: Response will be handled by the calling webhook
-            # (Removed duplicate response sending to prevent double SMS/messages)
-            logger.info(f"📤 AI response generated, will be sent by webhook handler")
-            
-            logger.info(f"✅ Conversation workflow completed for {request.user_id}")
-            return ai_response
-            
-        except Exception as e:
-            logger.error(f"❌ Conversation workflow failed for {request.user_id}: {e}")
-            return AIResponse(
-                response=f"I apologize, but I'm experiencing technical difficulties. Please try again later.",
-                conversation_id=request.conversation_id or "error",
-                platform=request.platform,
-                timestamp=workflow.now().isoformat(),  # FIXED: Use workflow.now() instead of datetime.now()
-                metadata={"error": str(e)}
-            )
-
-@workflow.defn
-class CrossPlatformRoutingWorkflow:
-    """Handle cross-platform conversation routing (MISSING from unified version)"""
-    
-    @workflow.run
-    async def run(self, request: ConversationRequest) -> Dict[str, Any]:
-        """Route conversation across platforms"""
-        workflow.logger.info(f"🔀 Cross-platform routing for {request.user_id}")
+    async def run(
+        self,
+        user_message: str,
+        channel: str,
+        user_id: str,
+        conversation_id: str,
+        conversation_history: List[Dict] = None,
+        user_context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """Execute multi-agent workflow"""
+        
+        request_id = workflow.uuid4()
+        conversation_history = conversation_history or []
+        user_context = user_context or {}
+        
+        workflow.logger.info(f"🤖 Multi-agent workflow started: {request_id}")
         
         try:
-            # Execute conversation workflow
-            ai_response = await workflow.execute_activity(
-                generate_ai_response_with_langchain,
-                request,
-                start_to_close_timeout=timedelta(seconds=30)
+            # Step 0: Enrich user context with credentials and current date
+            if not user_context.get("credentials"):
+                workflow.logger.info(f"📦 Step 0: Fetching user credentials for {user_id}")
+                # Fetch credentials from Supabase
+                credentials_result = await workflow.execute_activity(
+                    get_user_credentials_activity,
+                    args=[user_id],
+                    start_to_close_timeout=timedelta(seconds=2)
+                )
+                user_context["credentials"] = credentials_result
+            
+            # Add current date for date parsing (use workflow.now() for determinism)
+            if not user_context.get("current_date"):
+                user_context["current_date"] = workflow.now().strftime("%Y-%m-%d")
+            
+            # Ensure timezone is set
+            if not user_context.get("timezone"):
+                user_context["timezone"] = "UTC"
+            
+            workflow.logger.info(f"✅ User context enriched: timezone={user_context.get('timezone')}, date={user_context.get('current_date')}")
+            
+            # Step 1: Planner analyzes request
+            workflow.logger.info(f"📋 Step 1: Planner analyzing request")
+            plan_result = await workflow.execute_activity(
+                planner_analyze_activity,
+                args=[request_id, user_message, channel, conversation_history, user_context],
+                start_to_close_timeout=timedelta(seconds=5)
             )
             
-            # Send response via platform (FIXED: use correct parameters)
-            send_result = await workflow.execute_activity(
-                send_platform_response,
-                args=[request.platform, ai_response.response, request.metadata.get('from', ''), request.user_id],
-                start_to_close_timeout=timedelta(seconds=15)
+            execution_plan = plan_result["execution_plan"]
+            scorecard = plan_result["scorecard"]
+            
+            # Step 2: Timesheet extracts data (if Planner needs it)
+            timesheet_data = None
+            if execution_plan.get("needs_data"):
+                workflow.logger.info(f"📊 Step 2: Routing message to Timesheet Agent")
+                
+                # Get Planner's message to Timesheet Agent
+                planner_message = execution_plan.get("message_to_timesheet", "")
+                workflow.logger.info(f"📨 Planner → Timesheet: '{planner_message}'")
+                
+                timesheet_result = await workflow.execute_activity(
+                    timesheet_execute_activity,
+                    args=[
+                        request_id,
+                        planner_message,  # Natural language instruction
+                        user_context
+                    ],
+                    start_to_close_timeout=timedelta(seconds=10)
+                )
+                
+                if timesheet_result.get("success"):
+                    timesheet_data = timesheet_result.get("data")
+                    workflow.logger.info(f"✅ Timesheet Agent completed successfully")
+                else:
+                    # Timesheet failed - return graceful failure immediately
+                    error_msg = timesheet_result.get("error", "Unknown error")
+                    workflow.logger.error(f"❌ Timesheet Agent failed: {error_msg}")
+                    
+                    # Compose graceful failure message
+                    failure_result = await workflow.execute_activity(
+                        planner_graceful_failure_activity,
+                        args=[request_id, user_message, f"data_retrieval_failed: {error_msg}", channel],
+                        start_to_close_timeout=timedelta(seconds=3)
+                    )
+                    
+                    return {
+                        "request_id": request_id,
+                        "final_response": failure_result["failure_message"],
+                        "validation_passed": False,
+                        "refinement_attempted": False,
+                        "graceful_failure": True,
+                        "error": error_msg,
+                        "metadata": {"failure_step": "timesheet_data_retrieval"}
+                    }
+            
+            # Step 3: Planner composes response
+            workflow.logger.info(f"✍️ Step 3: Composing response")
+            compose_result = await workflow.execute_activity(
+                planner_compose_activity,
+                args=[request_id, user_message, timesheet_data, conversation_history, user_context],
+                start_to_close_timeout=timedelta(seconds=5)
             )
+            
+            response = compose_result["response"]
+            
+            # Step 4: Branding formats for channel
+            workflow.logger.info(f"🎨 Step 4: Formatting for {channel}")
+            branding_result = await workflow.execute_activity(
+                branding_format_activity,
+                args=[request_id, response, channel, user_context],
+                start_to_close_timeout=timedelta(seconds=5)  # Increased for LLM call
+            )
+            
+            formatted_response = branding_result["formatted_response"]
+            
+            # Step 5: Quality validates
+            workflow.logger.info(f"✅ Step 5: Validating quality")
+            validation_result = await workflow.execute_activity(
+                quality_validate_activity,
+                args=[request_id, formatted_response["content"], scorecard, channel, user_message],
+                start_to_close_timeout=timedelta(seconds=2)
+            )
+            
+            validation = validation_result["validation_result"]
+            failed_criteria = validation_result.get("failed_criteria", [])
+            refinement_count = 0
+            
+            # Step 6: Refinement if needed (max 1 attempt)
+            if not validation["passed"] and refinement_count < 1:
+                workflow.logger.info(f"🔄 Step 6: Refining response (attempt 1)")
+                
+                # Refine
+                refine_result = await workflow.execute_activity(
+                    planner_refine_activity,
+                    args=[
+                        request_id,
+                        response,
+                        failed_criteria,
+                        1
+                    ],
+                    start_to_close_timeout=timedelta(seconds=5)
+                )
+                
+                refined_response = refine_result["refined_response"]
+                
+                # Reformat
+                rebranding_result = await workflow.execute_activity(
+                    branding_format_activity,
+                    args=[request_id, refined_response, channel, user_context],
+                    start_to_close_timeout=timedelta(seconds=5)  # Increased for LLM call
+                )
+                
+                formatted_response = rebranding_result["formatted_response"]
+                
+                # Revalidate
+                revalidation_result = await workflow.execute_activity(
+                    quality_validate_activity,
+                    args=[request_id, formatted_response["content"], scorecard, channel, user_message],
+                    start_to_close_timeout=timedelta(seconds=2)
+                )
+                
+                validation = revalidation_result["validation_result"]
+                refinement_count = 1
+            
+            # Step 7: Graceful failure if still not passed
+            final_response = formatted_response["content"]
+            graceful_failure = False
+            
+            if not validation["passed"]:
+                workflow.logger.warning(f"⚠️ Step 7: Composing graceful failure")
+                
+                failure_result = await workflow.execute_activity(
+                    planner_graceful_failure_activity,
+                    args=[request_id, user_message, "validation_failed", channel],
+                    start_to_close_timeout=timedelta(seconds=1)
+                )
+                
+                # Validate graceful failure
+                await workflow.execute_activity(
+                    quality_validate_graceful_failure_activity,
+                    args=[request_id, failure_result["failure_message"], "validation_failed"],
+                    start_to_close_timeout=timedelta(seconds=1)
+                )
+                
+                final_response = failure_result["failure_message"]
+                graceful_failure = True
+            
+            # Step 8: Send response via appropriate channel
+            workflow.logger.info(f"📤 Step 8: Sending response via {channel}")
+            
+            try:
+                if channel == "sms" and user_context.get("from"):
+                    to_number = user_context["from"]
+                    sms_result = await workflow.execute_activity(
+                        send_sms_response_activity,
+                        args=[to_number, final_response, request_id],
+                        start_to_close_timeout=timedelta(seconds=10),
+                        retry_policy=RetryPolicy(
+                            maximum_attempts=3,
+                            initial_interval=timedelta(seconds=1),
+                            maximum_interval=timedelta(seconds=10),
+                        )
+                    )
+                    workflow.logger.info(f"✅ SMS sent: {sms_result.get('message_sid')}" if sms_result["success"] else f"❌ SMS failed: {sms_result.get('error')}")
+                    
+                elif channel == "email" and user_context.get("from"):
+                    to_email = user_context["from"]
+                    email_result = await workflow.execute_activity(
+                        send_email_response,
+                        args=[to_email, final_response, user_id],
+                        start_to_close_timeout=timedelta(seconds=10),
+                        retry_policy=RetryPolicy(maximum_attempts=2)
+                    )
+                    workflow.logger.info(f"✅ Email sent" if email_result["status"] == "success" else f"❌ Email failed")
+                    
+                elif channel == "whatsapp" and user_context.get("from"):
+                    to_whatsapp = user_context["from"]
+                    whatsapp_result = await workflow.execute_activity(
+                        send_whatsapp_response,
+                        args=[to_whatsapp, final_response, user_id],
+                        start_to_close_timeout=timedelta(seconds=10),
+                        retry_policy=RetryPolicy(maximum_attempts=2)
+                    )
+                    workflow.logger.info(f"✅ WhatsApp sent" if whatsapp_result["status"] == "success" else f"❌ WhatsApp failed")
+                    
+            except Exception as e:
+                workflow.logger.error(f"❌ Failed to send {channel} response: {e}")
+            
+            # Step 9: Store conversation in Supabase
+            workflow.logger.info(f"💾 Step 9: Storing conversation")
+            try:
+                store_result = await workflow.execute_activity(
+                    store_conversation,
+                    args=[user_id, user_message, final_response, channel, conversation_id, user_context],
+                    start_to_close_timeout=timedelta(seconds=5),
+                    retry_policy=RetryPolicy(maximum_attempts=2)
+                )
+                workflow.logger.info(f"✅ Conversation stored" if store_result["status"] == "success" else f"⚠️ Storage failed: {store_result.get('error')}")
+            except Exception as e:
+                workflow.logger.error(f"❌ Failed to store conversation: {e}")
+            
+            # Step 10: Log metrics
+            workflow.logger.info(f"📊 Step 10: Logging metrics")
+            try:
+                await workflow.execute_activity(
+                    log_conversation_metrics,
+                    args=[channel, len(user_message), len(final_response)],
+                    start_to_close_timeout=timedelta(seconds=5)
+                )
+                workflow.logger.info(f"✅ Metrics logged")
+            except Exception as e:
+                workflow.logger.error(f"❌ Failed to log metrics: {e}")
+            
+            # Step 11: Return result
+            workflow.logger.info(f"✅ Multi-agent workflow complete: {request_id}")
             
             return {
-                "status": "success",
-                "response": ai_response.response,
-                "send_result": send_result,
-                "user_id": request.user_id
+                "request_id": request_id,
+                "final_response": final_response,
+                "validation_passed": validation["passed"],
+                "refinement_attempted": refinement_count > 0,
+                "graceful_failure": graceful_failure,
+                "metadata": {
+                    "channel": channel,
+                    "user_id": user_id,
+                    "conversation_id": conversation_id
+                }
             }
             
         except Exception as e:
-            workflow.logger.error(f"❌ Cross-platform routing failed: {e}")
+            workflow.logger.error(f"❌ Multi-agent workflow failed: {e}")
             return {
-                "status": "error",
-                "message": str(e),
-                "user_id": request.user_id
+                "request_id": request_id,
+                "final_response": "I apologize, but I'm experiencing technical difficulties. Please try again later.",
+                "validation_passed": False,
+                "refinement_attempted": False,
+                "graceful_failure": True,
+                "metadata": {"error": str(e)}
             }
