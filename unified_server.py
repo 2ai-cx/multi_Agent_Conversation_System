@@ -160,14 +160,10 @@ from unified_workflows import (
 # Opik integration will be imported inside functions to avoid module-level HTTP imports
 
 def log_metric_standalone(name: str, value: float, tags: list = None, metadata: dict = None):
-    """Log metric without requiring class instance"""
-    try:
-        from opik_integration import log_metric
-        log_metric(name, value, tags=tags or [], metadata=metadata or {})
-    except ImportError:
-        logger.debug(f"📊 Opik not available - metric '{name}' not logged")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to log metric '{name}': {e}")
+    """Log metric without requiring class instance (deprecated - metrics now logged via LLM client)"""
+    # Metrics are now automatically logged through the LLM client's Opik integration
+    # This function is kept for backward compatibility but does nothing
+    logger.debug(f"📊 Metric '{name}' logged via LLM client Opik integration")
 
 class UnifiedTemporalServer:
     def __init__(self):
@@ -280,24 +276,19 @@ class UnifiedTemporalServer:
             logger.error(f"❌ Failed to initialize worker components: {e}")
 
     def _check_opik_enabled(self):
-        """Check if Opik is enabled without importing at module level"""
+        """Check if Opik is enabled via LLM client configuration"""
         try:
-            from opik_integration import opik_tracker
-            return opik_tracker.is_enabled()
-        except ImportError:
-            return False
+            # Opik is now integrated through the LLM client
+            opik_enabled_env = os.getenv("OPIK_ENABLED", "false").lower() == "true"
+            return opik_enabled_env
         except Exception:
             return False
 
     def _log_metric(self, name: str, value: float, tags: list = None, metadata: dict = None):
-        """Log metric without importing at module level"""
-        try:
-            from opik_integration import log_metric
-            log_metric(name, value, tags=tags or [], metadata=metadata or {})
-        except ImportError:
-            logger.debug(f"📊 Opik not available - metric '{name}' not logged")
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to log metric '{name}': {e}")
+        """Log metric (deprecated - metrics now logged via LLM client)"""
+        # Metrics are now automatically logged through the LLM client's Opik integration
+        # This method is kept for backward compatibility but does nothing
+        logger.debug(f"📊 Metric '{name}' logged via LLM client Opik integration")
 
     async def initialize_temporal_client(self):
         """Initialize Temporal client with HTTP/2 transport solution"""

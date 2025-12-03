@@ -121,16 +121,27 @@ Return ONLY valid JSON, no other text."""
             import re
             json_match = re.search(r'\{.*\}', llm_response, re.DOTALL)
             if json_match:
-                result = json.loads(json_match.group())
+                try:
+                    result = json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    # Fallback: use response as-is
+                    self.logger.warning(f"⚠️ [Branding] Could not parse LLM response, using original")
+                    result = {
+                        "formatted_content": str(llm_response),
+                        "is_split": False,
+                        "parts": [],
+                        "reasoning": "Fallback - used original response",
+                        "metadata": {"original_length": len(response), "final_length": len(str(llm_response))}
+                    }
             else:
                 # Fallback: use response as-is
                 self.logger.warning(f"⚠️ [Branding] Could not parse LLM response, using original")
                 result = {
-                    "formatted_content": response,
+                    "formatted_content": str(llm_response),
                     "is_split": False,
                     "parts": [],
                     "reasoning": "Fallback - used original response",
-                    "metadata": {"original_length": len(response), "final_length": len(response)}
+                    "metadata": {"original_length": len(response), "final_length": len(str(llm_response))}
                 }
         
         self.logger.info(f"💭 [Branding] LLM reasoning: {result.get('reasoning', 'N/A')}")

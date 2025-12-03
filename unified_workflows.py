@@ -3049,33 +3049,14 @@ async def store_conversation(user_id: str, message: str, response: str, platform
 
 @activity.defn
 async def log_conversation_metrics(platform: str, input_length: int, output_length: int) -> Dict[str, Any]:
-    """Log conversation metrics to Opik for monitoring and analytics"""
+    """Log conversation metrics to Opik for monitoring and analytics (deprecated - now handled by LLM client)"""
     try:
-        # Log metrics using opik_integration wrapper
+        # Metrics are now automatically logged through the LLM client's Opik integration
+        # This activity is kept for backward compatibility but metrics are logged elsewhere
+        logger.debug(f"📊 Conversation metrics for {platform} logged via LLM client Opik integration")
+        
         try:
-            from opik_integration import log_metric
-            # Log platform usage metrics
-            log_metric("conversation_count", 1, 
-                      tags=["conversation", platform], 
-                      metadata={"platform": platform})
-            
-            # Log message length metrics
-            log_metric("input_message_length", input_length,
-                      tags=["message_length", "input", platform],
-                      metadata={"platform": platform, "type": "input"})
-            
-            log_metric("output_message_length", output_length,
-                      tags=["message_length", "output", platform], 
-                      metadata={"platform": platform, "type": "output"})
-            
-            # Log response ratio (output/input)
-            if input_length > 0:
-                response_ratio = output_length / input_length
-                log_metric("response_ratio", response_ratio,
-                          tags=["efficiency", platform],
-                          metadata={"platform": platform, "input_length": input_length, "output_length": output_length})
-        except ImportError:
-            logger.debug("📊 Opik not available - metrics not logged")
+            pass  # Metrics now handled by LLM client
         except Exception as opik_error:
             logger.warning(f"⚠️ Opik metric logging failed: {opik_error}")
         

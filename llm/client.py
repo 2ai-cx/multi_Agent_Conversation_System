@@ -7,6 +7,7 @@ Single entry point for all LLM interactions with:
 - Error handling with retries
 - Cost tracking
 - Response caching
+- JSON minification for token savings
 """
 
 import time
@@ -17,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from llm.config import LLMConfig
+from llm.json_minifier import minify_for_llm, expand_from_llm, extract_json_from_response, calculate_token_savings
 
 
 @dataclass
@@ -411,6 +413,61 @@ class LLMClient:
             pass
         
         self.logger.info("LLM client closed")
+    
+    # JSON Minification Helpers
+    
+    def minify_json_data(
+        self,
+        data: Any,
+        abbreviate_keys: bool = True
+    ) -> str:
+        """
+        Minify JSON data for LLM consumption (saves ~30-50% tokens)
+        
+        Args:
+            data: Data to minify (dict, list, or any JSON-serializable)
+            abbreviate_keys: Whether to abbreviate dictionary keys
+        
+        Returns:
+            Minified JSON string
+        
+        Example:
+            >>> data = {"time_entries": [{"spent_date": "2025-11-13", "hours": 8}]}
+            >>> client.minify_json_data(data)
+            '{"te":[{"sd":"2025-11-13","h":8}]}'
+        """
+        minified = minify_for_llm(data, abbreviate_keys=abbreviate_keys)
+        
+        # Log savings
+        original = json.dumps(data, indent=2)
+        savings = calculate_token_savings(original, minified)
+        self.logger.debug(
+            f"JSON minified: {savings['chars_saved']} chars saved "
+            f"({savings['percent_saved']}%), ~{savings['tokens_saved_est']} tokens"
+        )
+        
+        return minified
+    
+    def expand_json_response(self, minified_json: str) -> Any:
+        """
+        Expand minified JSON from LLM response
+        
+        Args:
+            minified_json: Minified JSON string from LLM
+        
+        Returns:
+            Expanded Python object
+        
+        Example:
+            >>> minified = '{"te":[{"sd":"2025-11-13","h":8}]}'
+            >>> client.expand_json_response(minified)
+            {"time_entries": [{"spent_date": "2025-11-13", "hours": 8}]}
+        """
+        # Extract JSON if wrapped in markdown
+        json_str = extract_json_from_response(minified_json)
+        
+        # Expand abbreviated keys
+        return expand_from_llm(json_str)
 
 
 # Convenience function for quick usage

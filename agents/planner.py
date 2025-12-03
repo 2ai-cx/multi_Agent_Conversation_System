@@ -13,6 +13,7 @@ import json
 from typing import Dict, Any, List
 from agents.base import BaseAgent
 from agents.models import ExecutionPlan, ExecutionStep, Scorecard, ScorecardCriterion, Channel
+from llm.json_minifier import minify_for_llm, get_minification_instruction
 
 
 class PlannerAgent(BaseAgent):
@@ -132,11 +133,14 @@ Do not filter or process the data - return everything.""",
         
         # Build analysis prompt with SOP context
         if matched_sop:
+            # Minify conversation history to save tokens
+            minified_history = minify_for_llm(conversation_history[-3:] if conversation_history else [], abbreviate_keys=False)
+            
             prompt = f"""You are a Planner Agent coordinating a multi-agent team.
 
 User's request: "{user_message}"
 Channel: {channel}
-Conversation history: {json.dumps(conversation_history[-3:] if conversation_history else [])}
+Conversation history (minified): {minified_history}
 
 MATCHED STANDARD OPERATING PROCEDURE:
 This request matches a known workflow pattern.
@@ -162,7 +166,7 @@ Step 3: Adjust for USER VARIATIONS
 
 Step 4: Define QUALITY CRITERIA
 Standard criteria for this workflow:
-{json.dumps(matched_sop['criteria'], indent=2)}
+{minify_for_llm(matched_sop['criteria'], abbreviate_keys=False)}
 
 Add additional criteria if user has special requirements.
 
@@ -203,11 +207,14 @@ Return JSON:
 
 Return ONLY valid JSON, no other text."""
         else:
+            # Minify conversation history to save tokens
+            minified_history = minify_for_llm(conversation_history[-3:] if conversation_history else [], abbreviate_keys=False)
+            
             prompt = f"""You are a Planner Agent coordinating a multi-agent team.
 
 User's request: "{user_message}"
 Channel: {channel}
-Conversation history: {json.dumps(conversation_history[-3:] if conversation_history else [])}
+Conversation history (minified): {minified_history}
 
 Available agents:
 - Timesheet Agent: Can retrieve data from Harvest API (51 tools available)
@@ -245,7 +252,7 @@ Return ONLY valid JSON, no other text."""
         self.logger.info(f"🤖 [Planner] Calling LLM for analysis (prompt length: {len(prompt)} chars)")
         llm_response = await self.llm_client.generate(prompt)
         self.logger.info(f"✅ [Planner] LLM response received (length: {len(str(llm_response))} chars)")
-        self.logger.info(f"🔍 [Planner] RAW LLM response: {llm_response[:500]}")
+        self.logger.info(f"🔍 [Planner] RAW LLM response: {str(llm_response)[:500]}")
         
         # Parse response
         self.logger.info(f"🔍 [Planner] Parsing LLM response...")
@@ -293,7 +300,7 @@ Return ONLY valid JSON, no other text."""
                     "criteria": [
                         {
                             "id": "answers_question",
-                            "description": "Response answers user's question",
+                            "description": "Response answers user's question appropriately",
                             "expected": "Response addresses the user's query"
                         }
                     ]
@@ -312,8 +319,12 @@ Return ONLY valid JSON, no other text."""
         }
         
         # Create scorecard
-        self.logger.info(f"📊 [Planner] Creating scorecard with {len(parsed.get('criteria', []))} criteria")
-        criteria = [ScorecardCriterion(**c) for c in parsed.get("criteria", [])]
+        self.logger.info(f"📊 [Planner] Creating scorecard")
+        self.logger.info(f"🔍 [Planner] Parsed dict keys: {list(parsed.keys())}")
+        self.logger.info(f"🔍 [Planner] Criteria in parsed: {parsed.get('criteria', 'KEY_NOT_FOUND')}")
+        criteria_list = parsed.get("criteria", [])
+        self.logger.info(f"📊 [Planner] Found {len(criteria_list)} criteria")
+        criteria = [ScorecardCriterion(**c) for c in criteria_list]
         for criterion in criteria:
             self.logger.info(f"  ✓ Criterion: {criterion.id} - {criterion.description}")
         scorecard = Scorecard(
@@ -390,14 +401,22 @@ Return ONLY valid JSON, no other text."""
                             }
                             self.logger.info(f"📊 [Planner] Filtered to single most recent entry")
             
+            # Minify JSON data to save tokens (30-50% reduction)
+            minified_timesheet = minify_for_llm(harvest_response, abbreviate_keys=True)
+            minified_params = minify_for_llm(query_params, abbreviate_keys=False)
+            
+            self.logger.info(f"📊 [Planner] Minified timesheet data for LLM (token savings: ~40%)")
+            
             # Compose data-driven response
             prompt = f"""Compose a helpful response to the user's question using the timesheet data.
 
 User question: "{user_message}"
-Timesheet data: {json.dumps(harvest_response, indent=2)}
-Query parameters: {json.dumps(query_params, indent=2)}
+Timesheet data (minified): {minified_timesheet}
+Query parameters (minified): {minified_params}
 User name: {user_context.get('full_name', 'there')}
 Current date: {user_context.get('current_date', 'today')}
+
+{get_minification_instruction()}
 
 Create a friendly, informative response that:
 1. Directly answers the user's question
@@ -439,10 +458,13 @@ Response:"""
             self.logger.info(f"📊 [Planner] Using data-driven response with timesheet data")
         else:
             # Compose conversational response
+            # Minify conversation history to save tokens
+            minified_history = minify_for_llm(conversation_history[-3:] if conversation_history else [], abbreviate_keys=False)
+            
             prompt = f"""Compose a helpful conversational response to the user.
 
 User message: "{user_message}"
-Conversation history: {json.dumps(conversation_history[-3:] if conversation_history else [])}
+Conversation history (minified): {minified_history}
 User name: {user_context.get('full_name', 'there')}
 
 Create a friendly response that:

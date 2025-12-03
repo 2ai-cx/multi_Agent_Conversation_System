@@ -238,3 +238,114 @@ Return ONLY valid JSON, no other text."""
                 "success": False,
                 "error": str(e)
             }
+    
+    async def extract_timesheet_data(
+        self,
+        request_id: str,
+        user_id: str,
+        query_type: str,
+        parameters: Dict[str, Any],
+        user_credentials: Dict[str, Any],
+        timezone: str
+    ) -> Dict[str, Any]:
+        """
+        Extract timesheet data based on query type.
+        
+        This method provides a direct interface for extracting specific types of timesheet data
+        without going through the natural language processing of the execute method.
+        
+        Args:
+            request_id: Unique request identifier
+            user_id: User identifier
+            query_type: Type of data to extract ("hours_logged", "projects", "time_entries", etc.)
+            parameters: Query parameters (date_range, filters, etc.)
+            user_credentials: User's Harvest API credentials
+            timezone: User's timezone for date calculations
+            
+        Returns:
+            Dict with success, error, data, and metadata fields
+        """
+        self.logger.info(f"📊 [Timesheet] Extracting {query_type} data for user {user_id}")
+        
+        try:
+            # Map query types to appropriate harvest tools and expected data structure
+            query_mapping = {
+                "hours_logged": {
+                    "tool": "check_my_timesheet",
+                    "data_key": None  # Return data directly
+                },
+                "projects": {
+                    "tool": "list_my_projects", 
+                    "data_key": "projects"
+                },
+                "time_entries": {
+                    "tool": "get_time_entries",
+                    "data_key": "time_entries"
+                }
+            }
+            
+            if query_type not in query_mapping:
+                raise ValueError(f"Unsupported query type: {query_type}")
+            
+            mapping = query_mapping[query_type]
+            tool_name = mapping["tool"]
+            data_key = mapping["data_key"]
+            
+            # Check if the tool exists
+            if not hasattr(self.harvest_tools, tool_name):
+                raise ValueError(f"Harvest tool '{tool_name}' not found")
+            
+            tool_func = getattr(self.harvest_tools, tool_name)
+            self.logger.info(f"🔧 [Timesheet] Calling {tool_name} with credentials for user {user_id}")
+            
+            # Prepare parameters including user credentials and timezone
+            call_params = {
+                **parameters,
+                "user_credentials": user_credentials,
+                "timezone": timezone
+            }
+            
+            # Call the harvest tool
+            result = await tool_func(**call_params)
+            
+            self.logger.info(f"✅ [Timesheet] Tool {tool_name} executed successfully")
+            
+            # Structure the response according to test expectations
+            if data_key:
+                # For projects and time_entries, wrap in data structure
+                data = {data_key: result}
+            else:
+                # For hours_logged, return result directly
+                data = result
+            
+            return {
+                "success": True,
+                "error": None,
+                "data": data,
+                "metadata": {
+                    "tools_used": [tool_name],
+                    "api_calls": 1,
+                    "cache_hit": False,
+                    "request_id": request_id,
+                    "user_id": user_id,
+                    "query_type": query_type,
+                    "timezone": timezone
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"❌ [Timesheet] Failed to extract {query_type}: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "data": {},
+                "metadata": {
+                    "tools_used": [],
+                    "api_calls": 0,
+                    "cache_hit": False,
+                    "request_id": request_id,
+                    "user_id": user_id,
+                    "query_type": query_type,
+                    "timezone": timezone
+                }
+            }
