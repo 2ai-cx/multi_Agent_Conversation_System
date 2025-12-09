@@ -7,6 +7,7 @@ Single entry point for all LLM interactions with:
 - Error handling with retries
 - Cost tracking
 - Response caching
+- JSON minification for token savings
 """
 
 import time
@@ -17,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from llm.config import LLMConfig
+from llm.json_minifier import minify_for_llm, expand_from_llm, extract_json_from_response, calculate_token_savings
 
 
 @dataclass
@@ -176,6 +178,44 @@ class LLMClient:
                 )
                 self.logger.info("Tenant key manager initialized")
         return self._tenant_key_manager
+    
+    async def generate(
+        self,
+        prompt: str,
+        tenant_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """
+        Generate text from a prompt (convenience method)
+        
+        Args:
+            prompt: Text prompt
+            tenant_id: Tenant ID for rate limiting and cost tracking
+            user_id: User ID for rate limiting and cost tracking
+            temperature: Override default temperature
+            max_tokens: Override default max_tokens
+            **kwargs: Additional provider-specific parameters
+        
+        Returns:
+            Generated text content
+        
+        Raises:
+            RateLimitExceeded: If rate limit exceeded
+            LLMError: If LLM call fails after retries
+        """
+        messages = [{"role": "user", "content": prompt}]
+        response = await self.chat_completion(
+            messages=messages,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        return response.content
     
     async def chat_completion(
         self,
@@ -373,6 +413,61 @@ class LLMClient:
             pass
         
         self.logger.info("LLM client closed")
+    
+    # JSON Minification Helpers
+    
+    def minify_json_data(
+        self,
+        data: Any,
+        abbreviate_keys: bool = True
+    ) -> str:
+        """
+        Minify JSON data for LLM consumption (saves ~30-50% tokens)
+        
+        Args:
+            data: Data to minify (dict, list, or any JSON-serializable)
+            abbreviate_keys: Whether to abbreviate dictionary keys
+        
+        Returns:
+            Minified JSON string
+        
+        Example:
+            >>> data = {"time_entries": [{"spent_date": "2025-11-13", "hours": 8}]}
+            >>> client.minify_json_data(data)
+            '{"te":[{"sd":"2025-11-13","h":8}]}'
+        """
+        minified = minify_for_llm(data, abbreviate_keys=abbreviate_keys)
+        
+        # Log savings
+        original = json.dumps(data, indent=2)
+        savings = calculate_token_savings(original, minified)
+        self.logger.debug(
+            f"JSON minified: {savings['chars_saved']} chars saved "
+            f"({savings['percent_saved']}%), ~{savings['tokens_saved_est']} tokens"
+        )
+        
+        return minified
+    
+    def expand_json_response(self, minified_json: str) -> Any:
+        """
+        Expand minified JSON from LLM response
+        
+        Args:
+            minified_json: Minified JSON string from LLM
+        
+        Returns:
+            Expanded Python object
+        
+        Example:
+            >>> minified = '{"te":[{"sd":"2025-11-13","h":8}]}'
+            >>> client.expand_json_response(minified)
+            {"time_entries": [{"spent_date": "2025-11-13", "hours": 8}]}
+        """
+        # Extract JSON if wrapped in markdown
+        json_str = extract_json_from_response(minified_json)
+        
+        # Expand abbreviated keys
+        return expand_from_llm(json_str)
 
 
 # Convenience function for quick usage
@@ -398,3 +493,29 @@ async def create_llm_client(config_file: Optional[str] = None) -> LLMClient:
         config = LLMConfig()
     
     return LLMClient(config)
+
+
+# Global LLM client instance (singleton pattern)
+_global_llm_client: Optional[LLMClient] = None
+
+
+def get_llm_client() -> LLMClient:
+    """
+    Get or create the global LLM client instance (singleton)
+    
+    Returns:
+        Global LLMClient instance
+    
+    Example:
+        client = get_llm_client()
+        response = await client.chat_completion(
+            messages=[{"role": "user", "content": "Hello!"}]
+        )
+    """
+    global _global_llm_client
+    
+    if _global_llm_client is None:
+        config = LLMConfig()
+        _global_llm_client = LLMClient(config)
+    
+    return _global_llm_client

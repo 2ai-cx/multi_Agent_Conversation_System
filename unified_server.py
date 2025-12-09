@@ -119,38 +119,51 @@ load_secrets_to_env()
 
 # Import workflows from separate module (NO FastAPI in that file)
 from unified_workflows import (
+    # Timesheet workflows (still used)
     TimesheetReminderWorkflow,
     DailyReminderScheduleWorkflow,
-    ConversationWorkflow,
-    CrossPlatformRoutingWorkflow,
     TimesheetReminderRequest,
     TimesheetReminderResponse,
-    ConversationRequest,
-    AIResponse,
     get_timesheet_data,
     send_sms_reminder,
-    generate_ai_response_with_langchain,
+    send_sms_response_activity,  # NEW: Send SMS via Twilio API for async webhooks
+    add_joke_to_reminder_activity,
+    
+    # Legacy conversation data models (kept for compatibility)
+    ConversationRequest,
+    AIResponse,
+    
+    # Legacy conversation activities (kept for potential future use)
     store_conversation,
     send_platform_response,
     send_email_response,
     send_whatsapp_response,
     load_conversation_history,
     log_conversation_metrics,
-    add_joke_to_reminder_activity,
-    worker as unified_worker
+    
+    # Worker instance
+    worker as unified_worker,
+    
+    # Multi-agent system (REPLACED single-agent conversations)
+    MultiAgentConversationWorkflow,
+    get_user_credentials_activity,  # NEW: Fetch credentials from Supabase
+    planner_analyze_activity,
+    timesheet_execute_activity,  # FIXED: Renamed from timesheet_extract_activity
+    planner_compose_activity,
+    branding_format_activity,
+    quality_validate_activity,
+    planner_refine_activity,
+    planner_graceful_failure_activity,
+    quality_validate_graceful_failure_activity
 )
 
 # Opik integration will be imported inside functions to avoid module-level HTTP imports
 
 def log_metric_standalone(name: str, value: float, tags: list = None, metadata: dict = None):
-    """Log metric without requiring class instance"""
-    try:
-        from opik_integration import log_metric
-        log_metric(name, value, tags=tags or [], metadata=metadata or {})
-    except ImportError:
-        logger.debug(f"📊 Opik not available - metric '{name}' not logged")
-    except Exception as e:
-        logger.warning(f"⚠️ Failed to log metric '{name}': {e}")
+    """Log metric without requiring class instance (deprecated - metrics now logged via LLM client)"""
+    # Metrics are now automatically logged through the LLM client's Opik integration
+    # This function is kept for backward compatibility but does nothing
+    logger.debug(f"📊 Metric '{name}' logged via LLM client Opik integration")
 
 class UnifiedTemporalServer:
     def __init__(self):
@@ -207,12 +220,18 @@ class UnifiedTemporalServer:
             supabase_url = os.getenv("SUPABASE_URL")
             supabase_key = os.getenv("SUPABASE_KEY")
             
+            logger.info(f"🔍 Supabase URL loaded: {bool(supabase_url)}")
+            logger.info(f"🔍 Supabase Key loaded: {bool(supabase_key)}")
+            
             if supabase_url and supabase_key:
                 from supabase import create_client
                 unified_worker.supabase_client = create_client(supabase_url, supabase_key)
                 unified_worker.supabase_url = supabase_url
                 unified_worker.supabase_key = supabase_key
-                logger.info("✅ Supabase client initialized")
+                logger.info(f"✅ Supabase client initialized: {supabase_url}")
+            else:
+                logger.error(f"❌ Supabase client NOT initialized - URL: {bool(supabase_url)}, Key: {bool(supabase_key)}")
+                unified_worker.supabase_client = None
             
             # Initialize LLM Client (centralized component with all best practices)
             try:
@@ -257,24 +276,19 @@ class UnifiedTemporalServer:
             logger.error(f"❌ Failed to initialize worker components: {e}")
 
     def _check_opik_enabled(self):
-        """Check if Opik is enabled without importing at module level"""
+        """Check if Opik is enabled via LLM client configuration"""
         try:
-            from opik_integration import opik_tracker
-            return opik_tracker.is_enabled()
-        except ImportError:
-            return False
+            # Opik is now integrated through the LLM client
+            opik_enabled_env = os.getenv("OPIK_ENABLED", "false").lower() == "true"
+            return opik_enabled_env
         except Exception:
             return False
 
     def _log_metric(self, name: str, value: float, tags: list = None, metadata: dict = None):
-        """Log metric without importing at module level"""
-        try:
-            from opik_integration import log_metric
-            log_metric(name, value, tags=tags or [], metadata=metadata or {})
-        except ImportError:
-            logger.debug(f"📊 Opik not available - metric '{name}' not logged")
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to log metric '{name}': {e}")
+        """Log metric (deprecated - metrics now logged via LLM client)"""
+        # Metrics are now automatically logged through the LLM client's Opik integration
+        # This method is kept for backward compatibility but does nothing
+        logger.debug(f"📊 Metric '{name}' logged via LLM client Opik integration")
 
     async def initialize_temporal_client(self):
         """Initialize Temporal client with HTTP/2 transport solution"""
@@ -382,53 +396,47 @@ class UnifiedTemporalServer:
                 workflows=[
                     TimesheetReminderWorkflow,
                     DailyReminderScheduleWorkflow,
-                    ConversationWorkflow,
-                    CrossPlatformRoutingWorkflow
+                    MultiAgentConversationWorkflow  # Multi-agent system (REPLACED ConversationWorkflow)
                 ],
                 activities=[
                     # Timesheet-related activities
                     get_timesheet_data,
                     send_sms_reminder,
+                    send_sms_response_activity,  # NEW: Send SMS via Twilio API for async webhooks
                     add_joke_to_reminder_activity,
 
-                    # Conversation-related activities
-                    generate_ai_response_with_langchain,
+                    # Legacy conversation activities (kept for compatibility)
                     store_conversation,
                     send_platform_response,
                     send_email_response,
                     send_whatsapp_response,
                     load_conversation_history,
-                    log_conversation_metrics
+                    log_conversation_metrics,
+                    
+                    # Multi-agent activities (REPLACED single-agent)
+                    get_user_credentials_activity,  # NEW: Fetch credentials from Supabase
+                    planner_analyze_activity,
+                    timesheet_execute_activity,  # FIXED: Renamed from timesheet_extract_activity
+                    planner_compose_activity,
+                    branding_format_activity,
+                    quality_validate_activity,
+                    planner_refine_activity,
+                    planner_graceful_failure_activity,
+                    quality_validate_graceful_failure_activity
                 ]
             )
             
-            # Create separate worker for conversations
-            conversation_worker = Worker(
-                self.temporal_client,
-                task_queue="conversations",
-                workflows=[ConversationWorkflow, CrossPlatformRoutingWorkflow],
-                activities=[
-                    generate_ai_response_with_langchain,
-                    store_conversation,
-                    send_platform_response,
-                    send_email_response,
-                    send_whatsapp_response,
-                    load_conversation_history,
-                    log_conversation_metrics
-                ]
-            )
+            # NOTE: Removed separate conversation_worker - all conversations now use multi-agent system
+            # on the primary "timesheet-reminders" queue
             
-            logger.info("🚀 Starting Temporal workers...")
+            logger.info("🚀 Starting Temporal worker...")
             
-            # Now that workers are created and validated, setup schedules
+            # Now that worker is created and validated, setup schedules
             logger.info("🔄 Setting up Temporal schedules after worker validation...")
             await self._setup_temporal_schedules()
             
-            # Start both workers concurrently
-            await asyncio.gather(
-                worker.run(),
-                conversation_worker.run()
-            )
+            # Start the unified worker
+            await worker.run()
             
         except Exception as e:
             logger.error(f"❌ Failed to start Temporal worker: {e}")
@@ -1122,6 +1130,7 @@ async def handle_sms_webhook(request: Request, From: str = Form(...), Body: str 
         # Extract user ID from phone number by querying Supabase
         user_id = None
         try:
+            logger.info(f"🔍 Supabase client available: {unified_worker.supabase_client is not None}")
             if unified_worker.supabase_client:
                 # Normalize phone number format (Twilio may send different formats)
                 normalized_phone = From.strip()
@@ -1157,41 +1166,69 @@ async def handle_sms_webhook(request: Request, From: str = Form(...), Body: str 
             metadata={"from": From, "message_sid": MessageSid}
         )
         
-        # Start conversation workflow
+        # Load conversation history from Supabase
+        conversation_history = []
+        try:
+            if unified_worker.supabase_client and user_id:
+                logger.info(f"📚 Loading conversation history for {user_id}")
+                history_result = unified_worker.supabase_client.table('conversations')\
+                    .select('message_type, content, created_at')\
+                    .eq('user_id', user_id)\
+                    .order('created_at', desc=True)\
+                    .limit(10)\
+                    .execute()
+                
+                if history_result.data:
+                    # Reverse to get chronological order (oldest first)
+                    conversation_history = list(reversed(history_result.data))
+                    logger.info(f"✅ Loaded {len(conversation_history)} conversation messages")
+                else:
+                    logger.info(f"📝 No conversation history found for {user_id}")
+        except Exception as e:
+            logger.error(f"⚠️ Failed to load conversation history: {e}")
+            conversation_history = []
+        
+        # Start multi-agent conversation workflow (REPLACED single agent system)
         logger.info(f"🔍 DEBUG: About to start workflow, temporal_client exists: {server.temporal_client is not None}")
+        logger.info(f"🤖 Using Multi-Agent Conversation System")
+        
         if server.temporal_client:
-            workflow_id = f"conversation_{user_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"  # FIXED: Use UTC time
+            workflow_id = f"conversation_{user_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
             logger.info(f"🔍 DEBUG: Starting workflow with ID: {workflow_id}")
             try:
-                result = await server.temporal_client.start_workflow(
-                    ConversationWorkflow.run,
-                    conversation_request,
+                # Use multi-agent workflow (quality-validated, channel-formatted)
+                logger.info(f"🤖 Starting MultiAgentConversationWorkflow")
+                await server.temporal_client.start_workflow(
+                    MultiAgentConversationWorkflow.run,
+                    args=[
+                        Body,  # user_message
+                        "sms",  # channel
+                        user_id,  # user_id
+                        f"sms_{MessageSid}",  # conversation_id
+                        conversation_history,  # conversation_history (loaded from Supabase)
+                        {"from": From}  # user_context
+                    ],
                     id=workflow_id,
-                    task_queue="conversations"
+                    task_queue="timesheet-reminders"
                 )
-                logger.info(f"🔍 DEBUG: Workflow started, awaiting result...")
+                logger.info(f"✅ Workflow started: {workflow_id}")
+                logger.info(f"� Returning 200 OK immediately - SMS will be sent when workflow completes")
                 
-                # Get the AI response (FIXED: await the workflow result properly)
-                ai_response = await result.result()
-                logger.info(f"🔍 DEBUG: Workflow completed, response: {ai_response.response[:100]}...")
-                response_text = ai_response.response
-                
-                # Log successful response metric
-                log_metric_standalone("webhook_success", 1, tags=["sms", "success"], 
-                          metadata={"platform": "sms", "user_id": user_id, "response_length": len(response_text)})
+                # Log workflow started metric
+                log_metric_standalone("webhook_success", 1, tags=["sms", "async"], 
+                          metadata={"platform": "sms", "user_id": user_id, "workflow_id": workflow_id})
             except Exception as workflow_error:
-                logger.error(f"❌ Workflow execution failed: {workflow_error}")
-                response_text = "I'm experiencing technical difficulties. Please try again later."
+                logger.error(f"❌ Workflow start failed: {workflow_error}")
         else:
             # Temporal client not available - system cannot function without it
             logger.error("❌ Temporal client not available - system requires Temporal workflows")
-            response_text = "System is currently initializing. Please try again in a moment."
         
-        # Return TwiML response
-        twiml_response = f'<?xml version="1.0" encoding="UTF-8"?><Response><Message>{response_text}</Message></Response>'
+        # Return empty TwiML response immediately (< 1 second) - workflow will send SMS via Twilio API
+        twiml_response = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
         
-        logger.info(f"✅ SMS response sent to {From}")
-        return Response(content=twiml_response, media_type="application/xml")
+        logger.info(f"📤 Returning empty TwiML (200 OK)")
+        logger.info(f"✅ Webhook processed for {From}")
+        return Response(content=twiml_response, media_type="text/xml; charset=utf-8")
         
     except Exception as e:
         logger.error(f"❌ SMS webhook error: {e}")
@@ -1248,24 +1285,35 @@ async def handle_whatsapp_webhook(request: Request, From: str = Form(...), Body:
             metadata={"from": whatsapp_number, "message_sid": MessageSid}  # Store WhatsApp number
         )
         
-        # Start conversation workflow (IDENTICAL to SMS)
+        # Start multi-agent conversation workflow (REPLACED single agent system)
         logger.info(f"🔍 DEBUG: About to start WhatsApp workflow, temporal_client exists: {server.temporal_client is not None}")
+        logger.info(f"🤖 Using Multi-Agent Conversation System for WhatsApp")
+        
         if server.temporal_client:
-            workflow_id = f"conversation_{user_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"  # FIXED: Use UTC time
+            workflow_id = f"conversation_{user_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
             logger.info(f"🔍 DEBUG: Starting WhatsApp workflow with ID: {workflow_id}")
             try:
+                # Use multi-agent workflow (quality-validated, channel-formatted)
+                logger.info(f"🤖 Starting MultiAgentConversationWorkflow for WhatsApp")
                 result = await server.temporal_client.start_workflow(
-                    ConversationWorkflow.run,
-                    conversation_request,
+                    MultiAgentConversationWorkflow.run,
+                    args=[
+                        Body,  # user_message
+                        "whatsapp",  # channel
+                        user_id,  # user_id
+                        f"whatsapp_{MessageSid}",  # conversation_id
+                        [],  # conversation_history (TODO: load from DB)
+                        {"from": whatsapp_number}  # user_context
+                    ],
                     id=workflow_id,
-                    task_queue="conversations"  # SAME task queue as SMS
+                    task_queue="timesheet-reminders"
                 )
-                logger.info(f"🔍 DEBUG: WhatsApp workflow started, awaiting result...")
+                logger.info(f"🔍 DEBUG: WhatsApp multi-agent workflow started, awaiting result...")
                 
-                # Get the AI response (FIXED: await the workflow result properly)
-                ai_response = await result.result()
-                logger.info(f"🔍 DEBUG: WhatsApp workflow completed, response: {ai_response.response[:100]}...")
-                response_text = ai_response.response
+                # Get the multi-agent response
+                ma_response = await result.result()
+                logger.info(f"🔍 DEBUG: WhatsApp multi-agent workflow completed")
+                response_text = ma_response["final_response"]
             except Exception as workflow_error:
                 logger.error(f"❌ WhatsApp workflow execution failed: {workflow_error}")
                 response_text = "I'm experiencing technical difficulties. Please try again later."
@@ -1322,23 +1370,36 @@ async def handle_email_webhook(request: Request):
             metadata={"from": user_email}
         )
         
-        # Start conversation workflow
+        # Start multi-agent conversation workflow (REPLACED single agent system)
+        logger.info(f"🤖 Using Multi-Agent Conversation System for Email")
+        
         if server.temporal_client:
-            workflow_id = f"conversation_{user_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"  # FIXED: Use UTC time
+            workflow_id = f"conversation_{user_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            logger.info(f"🤖 Starting MultiAgentConversationWorkflow for Email")
+            
             result = await server.temporal_client.start_workflow(
-                ConversationWorkflow.run,
-                conversation_request,
+                MultiAgentConversationWorkflow.run,
+                args=[
+                    message_content,  # user_message
+                    "email",  # channel
+                    user_id,  # user_id
+                    f"email_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",  # conversation_id
+                    [],  # conversation_history (TODO: load from DB)
+                    {"from": user_email}  # user_context
+                ],
                 id=workflow_id,
-                task_queue="conversations"
+                task_queue="timesheet-reminders"
             )
             
-            # Get the AI response (FIXED: await the workflow result properly)
-            ai_response = await result.result()
+            # Get the multi-agent response
+            ma_response = await result.result()
+            response_text = ma_response["final_response"]
             
             # Send email response (placeholder - would need actual email sending)
             logger.info(f"📧 Email response generated for {user_email}")
+            logger.info(f"📧 Response: {response_text[:100]}...")
             
-            return {"status": "success", "message": "Email processed"}
+            return {"status": "success", "message": "Email processed", "response": response_text}
         else:
             return {"status": "error", "message": "Temporal client not available"}
         

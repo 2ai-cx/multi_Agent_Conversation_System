@@ -12,6 +12,7 @@ Key Features:
 - Hardened error handling with retries and fallbacks
 - Token usage tracking and cost attribution
 - Response caching for cost optimization
+- JSON minification for 30-50% token savings
 
 Usage:
     from llm.client import LLMClient
@@ -25,11 +26,23 @@ Usage:
         tenant_id="tenant-123",
         user_id="user-456"
     )
+    
+    # JSON minification
+    minified = client.minify_json_data(data)
+    expanded = client.expand_json_response(llm_response)
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from llm.config import LLMConfig
 from llm.client import LLMClient, LLMResponse
+from llm.json_minifier import minify_for_llm, expand_from_llm, get_minification_instruction
 
-__all__ = ["LLMConfig", "LLMClient", "LLMResponse"]
+__all__ = [
+    "LLMConfig",
+    "LLMClient", 
+    "LLMResponse",
+    "minify_for_llm",
+    "expand_from_llm",
+    "get_minification_instruction"
+]
