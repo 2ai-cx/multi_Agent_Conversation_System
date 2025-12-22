@@ -1,0 +1,113 @@
+🧪 Mem0 + Qdrant Integration Test Suite
+========================================
+
+📋 Checking prerequisites...
+[0;32m✅ pytest found[0m
+🔍 Checking Azure deployment status...
+[0;32m✅ Azure deployment is running[0m
+
+🚀 Starting test execution...
+
+Running all tests...
+/opt/anaconda3/lib/python3.13/site-packages/pytest_asyncio/plugin.py:252: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.13.5, pytest-8.3.4, pluggy-1.5.0 -- /opt/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/dongshulin/Library/CloudStorage/OneDrive-2ai.cx/Desktop/GitHub/multi_Agent_Conversation_System
+plugins: opik-1.8.34, langsmith-0.4.17, asyncio-1.2.0, anyio-4.12.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 29 items
+
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_single_memory_storage_and_retrieval PASSED [  3%]
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_multiple_memories_retrieval FAILED [  6%]
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_memory_persistence_across_sessions PASSED [ 10%]
+tests/test_mem0_qdrant_integration.py::TestMultiTenantIsolation::test_tenant_isolation PASSED [ 13%]
+tests/test_mem0_qdrant_integration.py::TestMultiTenantIsolation::test_user_isolation_within_tenant PASSED [ 17%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_empty_query PASSED [ 20%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_very_long_conversation PASSED [ 24%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_special_characters PASSED [ 27%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_unicode_and_emoji PASSED [ 31%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_duplicate_memories PASSED [ 34%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_contradictory_information PASSED [ 37%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_storage_latency FAILED [ 41%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_retrieval_latency FAILED [ 44%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_concurrent_users PASSED [ 48%]
+tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_numeric_data_accuracy FAILED [ 51%]
+tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_date_and_time_information PASSED [ 55%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_invalid_tenant_id PASSED [ 58%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_missing_user_id PASSED [ 62%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_malformed_request PASSED [ 65%]
+tests/test_mem0_qdrant_integration.py::TestSemanticSearch::test_semantic_similarity PASSED [ 68%]
+tests/test_mem0_qdrant_integration.py::TestSemanticSearch::test_context_understanding PASSED [ 72%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_whitespace_only_message PASSED [ 75%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_invalid_json PASSED [ 79%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_missing_tenant_id PASSED [ 82%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_numeric_ids PASSED [ 86%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_very_short_message PASSED [ 89%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_response_format PASSED [ 93%]
+tests/test_mem0_qdrant_integration.py::TestMemoryRetrieval::test_irrelevant_query PASSED [ 96%]
+tests/test_mem0_qdrant_integration.py::TestMemoryRetrieval::test_multiple_facts_retrieval FAILED [100%]
+
+=================================== FAILURES ===================================
+__________ TestBasicMemoryOperations.test_multiple_memories_retrieval __________
+tests/test_mem0_qdrant_integration.py:81: in test_multiple_memories_retrieval
+    assert "software engineer" in result["assistant_response"].lower()
+E   assert 'software engineer' in "i'm not sure what your specific job is based on the information provided. however, you mentioned having 5 years of experience, which suggests you might be in a more established role in your field. if you provide more details, i'd be happy to try and narrow it down!"
+E    +  where "i'm not sure what your specific job is based on the information provided. however, you mentioned having 5 years of experience, which suggests you might be in a more established role in your field. if you provide more details, i'd be happy to try and narrow it down!" = <built-in method lower of str object at 0x315a0da70>()
+E    +    where <built-in method lower of str object at 0x315a0da70> = "I'm not sure what your specific job is based on the information provided. However, you mentioned having 5 years of experience, which suggests you might be in a more established role in your field. If you provide more details, I'd be happy to try and narrow it down!".lower
+_____________________ TestPerformance.test_storage_latency _____________________
+tests/test_mem0_qdrant_integration.py:310: in test_storage_latency
+    assert avg_latency < 5.0
+E   assert 5.114932441711426 < 5.0
+----------------------------- Captured stdout call -----------------------------
+
+Average storage latency: 5.11s
+____________________ TestPerformance.test_retrieval_latency ____________________
+tests/test_mem0_qdrant_integration.py:342: in test_retrieval_latency
+    assert avg_latency < 5.0
+E   assert 8.40323576927185 < 5.0
+----------------------------- Captured stdout call -----------------------------
+
+Average retrieval latency: 8.40s
+_________________ TestDataIntegrity.test_numeric_data_accuracy _________________
+tests/test_mem0_qdrant_integration.py:398: in test_numeric_data_accuracy
+    assert "847" in result
+E   AssertionError: assert '847' in 'To determine how many hours you worked and how much you earned, I would need more specific information from you. Could you provide details such as:\n\n1. Your work schedule (number of hours worked per day or week).\n2. The time period in question (e.g., one week, one month).\n3. Your hourly wage or salary.\n\nWith this information, I can help you calculate your total hours worked and earnings.'
+______________ TestMemoryRetrieval.test_multiple_facts_retrieval _______________
+tests/test_mem0_qdrant_integration.py:653: in test_multiple_facts_retrieval
+    assert mentions >= 2
+E   assert 0 >= 2
+=========================== short test summary info ============================
+FAILED tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_multiple_memories_retrieval
+FAILED tests/test_mem0_qdrant_integration.py::TestPerformance::test_storage_latency
+FAILED tests/test_mem0_qdrant_integration.py::TestPerformance::test_retrieval_latency
+FAILED tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_numeric_data_accuracy
+FAILED tests/test_mem0_qdrant_integration.py::TestMemoryRetrieval::test_multiple_facts_retrieval
+=================== 5 failed, 24 passed in 424.45s (0:07:04) ===================
+
+========================================
+📊 Test Summary
+========================================
+Total Tests: 34
+[0;32mPassed: 24[0m
+[0;31mFailed: 10[0m
+Success Rate: 70.6%
+
+📈 Performance Metrics
+========================================
+Average storage latency: 5.11s
+Average retrieval latency: 8.40s
+
+📄 Full report saved to: test_results/mem0_test_report_20251217_160053.txt
+
+[0;31m❌ Some tests failed[0m
+
+Please review the failures above and:
+  1. Check Azure logs: az containerapp logs show --name unified-temporal-worker
+  2. Verify Qdrant service health
+  3. Review QDRANT_RETRIEVAL_EVALUATION.md for known issues
+  4. Re-run specific failed tests for debugging
+

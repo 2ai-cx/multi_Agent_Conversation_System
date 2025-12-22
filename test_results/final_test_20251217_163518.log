@@ -1,0 +1,84 @@
+🧪 Mem0 + Qdrant Integration Test Suite
+========================================
+
+📋 Checking prerequisites...
+[0;32m✅ pytest found[0m
+🔍 Checking Azure deployment status...
+[0;32m✅ Azure deployment is running[0m
+
+🚀 Starting test execution...
+
+Running all tests...
+/opt/anaconda3/lib/python3.13/site-packages/pytest_asyncio/plugin.py:252: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.13.5, pytest-8.3.4, pluggy-1.5.0 -- /opt/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/dongshulin/Library/CloudStorage/OneDrive-2ai.cx/Desktop/GitHub/multi_Agent_Conversation_System
+plugins: opik-1.8.34, langsmith-0.4.17, asyncio-1.2.0, anyio-4.12.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 29 items
+
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_single_memory_storage_and_retrieval PASSED [  3%]
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_multiple_memories_retrieval PASSED [  6%]
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_memory_persistence_across_sessions PASSED [ 10%]
+tests/test_mem0_qdrant_integration.py::TestMultiTenantIsolation::test_tenant_isolation PASSED [ 13%]
+tests/test_mem0_qdrant_integration.py::TestMultiTenantIsolation::test_user_isolation_within_tenant PASSED [ 17%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_empty_query PASSED [ 20%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_very_long_conversation PASSED [ 24%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_special_characters PASSED [ 27%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_unicode_and_emoji PASSED [ 31%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_duplicate_memories PASSED [ 34%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_contradictory_information PASSED [ 37%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_storage_latency PASSED [ 41%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_retrieval_latency PASSED [ 44%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_concurrent_users PASSED [ 48%]
+tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_numeric_data_accuracy PASSED [ 51%]
+tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_date_and_time_information PASSED [ 55%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_invalid_tenant_id PASSED [ 58%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_missing_user_id PASSED [ 62%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_malformed_request PASSED [ 65%]
+tests/test_mem0_qdrant_integration.py::TestSemanticSearch::test_semantic_similarity PASSED [ 68%]
+tests/test_mem0_qdrant_integration.py::TestSemanticSearch::test_context_understanding PASSED [ 72%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_whitespace_only_message PASSED [ 75%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_invalid_json PASSED [ 79%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_missing_tenant_id PASSED [ 82%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_numeric_ids PASSED [ 86%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_very_short_message PASSED [ 89%]
+tests/test_mem0_qdrant_integration.py::TestAdditionalValidation::test_response_format PASSED [ 93%]
+tests/test_mem0_qdrant_integration.py::TestMemoryRetrieval::test_irrelevant_query PASSED [ 96%]
+tests/test_mem0_qdrant_integration.py::TestMemoryRetrieval::test_multiple_facts_retrieval FAILED [100%]
+
+=================================== FAILURES ===================================
+______________ TestMemoryRetrieval.test_multiple_facts_retrieval _______________
+tests/test_mem0_qdrant_integration.py:653: in test_multiple_facts_retrieval
+    assert mentions >= 2
+E   assert 1 >= 2
+=========================== short test summary info ============================
+FAILED tests/test_mem0_qdrant_integration.py::TestMemoryRetrieval::test_multiple_facts_retrieval
+=================== 1 failed, 28 passed in 409.34s (0:06:49) ===================
+
+========================================
+📊 Test Summary
+========================================
+Total Tests: 30
+[0;32mPassed: 28[0m
+[0;31mFailed: 2[0m
+Success Rate: 93.3%
+
+📈 Performance Metrics
+========================================
+No performance metrics found
+
+📄 Full report saved to: test_results/mem0_test_report_20251217_163519.txt
+
+[0;31m❌ Some tests failed[0m
+
+Please review the failures above and:
+  1. Check Azure logs: az containerapp logs show --name unified-temporal-worker
+  2. Verify Qdrant service health
+  3. Review QDRANT_RETRIEVAL_EVALUATION.md for known issues
+  4. Re-run specific failed tests for debugging
+
