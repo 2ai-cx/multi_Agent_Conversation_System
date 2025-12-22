@@ -4,7 +4,7 @@ Allows using Mem0's self-improving memory through LangChain's memory abstraction
 """
 
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from llm.memory import LLMMemoryManager
 import logging
 
@@ -23,15 +23,14 @@ class Mem0LangChainMemory(BaseModel):
     Through LangChain's memory interface for agents and chains.
     """
     
-    mem0_manager: LLMMemoryManager
+    mem0_manager: Any
     tenant_id: str
     user_id: str
     memory_key: str = "context"
     chat_history_key: str = "chat_history"
     k: int = 10
     
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     
     def __init__(
         self,
@@ -43,13 +42,14 @@ class Mem0LangChainMemory(BaseModel):
         k: int = 10
     ):
         """Initialize with Mem0 manager and user context"""
-        super().__init__()
-        self.mem0_manager = mem0_manager
-        self.tenant_id = tenant_id
-        self.user_id = user_id
-        self.memory_key = memory_key
-        self.chat_history_key = chat_history_key
-        self.k = k
+        super().__init__(
+            mem0_manager=mem0_manager,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            memory_key=memory_key,
+            chat_history_key=chat_history_key,
+            k=k
+        )
     
     @property
     def memory_variables(self) -> List[str]:

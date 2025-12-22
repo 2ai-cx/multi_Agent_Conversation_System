@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 from temporalio import activity
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain_core.prompts import PromptTemplate
-from langchain_core.memory import ConversationBufferMemory
 from llm.langchain_wrapper import CustomLangChainLLM
 from llm.langchain_mem0_bridge import Mem0LangChainMemory
 from llm.memory import LLMMemoryManager

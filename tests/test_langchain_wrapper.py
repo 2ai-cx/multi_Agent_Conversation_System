@@ -18,6 +18,10 @@ class TestCustomLangChainLLM:
         config = Mock(spec=LLMConfig)
         config.model = "test-model"
         config.api_key = "test-key"
+        config.log_level = "INFO"
+        config.max_retries = 3
+        config.timeout = 30
+        config.temperature = 0.7
         return config
     
     @pytest.fixture
@@ -39,6 +43,11 @@ class TestCustomLangChainLLM:
     def test_initialization_without_config(self):
         """Test initialization with default config"""
         with patch('llm.langchain_wrapper.LLMConfig') as mock_config_class:
+            mock_config = Mock()
+            mock_config.log_level = "INFO"
+            mock_config.model = "test-model"
+            mock_config_class.return_value = mock_config
+            
             llm = CustomLangChainLLM()
             assert llm.custom_client is not None
     
