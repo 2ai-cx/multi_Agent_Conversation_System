@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-12-22T18:53:29.961784",
+  "mode": "mock",
+  "overall_pass_rate": 1.0,
+  "overall_precision": 1.0,
+  "test_results": [
+    {
+      "name": "Basic Fact Retrieval",
+      "total_queries": 2,
+      "passed_queries": 2,
+      "pass_rate": 1.0,
+      "avg_precision": 1.0
+    },
+    {
+      "name": "Timesheet Context",
+      "total_queries": 1,
+      "passed_queries": 1,
+      "pass_rate": 1.0,
+      "avg_precision": 1.0
+    }
+  ]
+}

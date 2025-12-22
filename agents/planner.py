@@ -248,9 +248,26 @@ Return JSON:
 
 Return ONLY valid JSON, no other text."""
         
-        # Call LLM
+        # Call LLM (with memory if available)
         self.logger.info(f"🤖 [Planner] Calling LLM for analysis (prompt length: {len(prompt)} chars)")
-        llm_response = await self.llm_client.generate(prompt)
+        
+        # ➕ NEW: Use memory-enabled generation if tenant_id available
+        tenant_id = user_context.get("tenant_id", "default")
+        user_id = user_context.get("user_id")
+        
+        # Try memory-enabled method first, fallback to regular if not available
+        if hasattr(self.llm_client, 'generate_with_memory') and tenant_id:
+            llm_response = await self.llm_client.generate_with_memory(
+                prompt=prompt,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                use_memory=True
+            )
+            self.logger.info(f"🧠 [Planner] Used memory-enabled LLM")
+        else:
+            llm_response = await self.llm_client.generate(prompt)
+            self.logger.info(f"🤖 [Planner] Used standard LLM (no memory)")
+        
         self.logger.info(f"✅ [Planner] LLM response received (length: {len(str(llm_response))} chars)")
         self.logger.info(f"🔍 [Planner] RAW LLM response: {str(llm_response)[:500]}")
         
@@ -477,9 +494,26 @@ Response:"""
             response_type = "conversational"
             self.logger.info(f"💬 [Planner] Using conversational response (no timesheet data)")
         
-        # Call LLM
+        # Call LLM (with memory if available)
         self.logger.info(f"🤖 [Planner] Calling LLM for composition (prompt length: {len(prompt)} chars)")
-        response = await self.llm_client.generate(prompt)
+        
+        # ➕ NEW: Use memory-enabled generation if tenant_id available
+        tenant_id = user_context.get("tenant_id", "default")
+        user_id = user_context.get("user_id")
+        
+        # Try memory-enabled method first, fallback to regular if not available
+        if hasattr(self.llm_client, 'generate_with_memory') and tenant_id:
+            response = await self.llm_client.generate_with_memory(
+                prompt=prompt,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                use_memory=True
+            )
+            self.logger.info(f"🧠 [Planner] Used memory-enabled LLM")
+        else:
+            response = await self.llm_client.generate(prompt)
+            self.logger.info(f"🤖 [Planner] Used standard LLM (no memory)")
+        
         self.logger.info(f"✅ [Planner] Response composed (length: {len(str(response))} chars)")
         
         # Clean up response
@@ -548,7 +582,7 @@ Create an improved response that:
 
 Refined response:"""
         
-        # Call LLM
+        # Call LLM (standard - refinement doesn't need memory)
         refined = await self.llm_client.generate(prompt)
         
         # Extract changes made
@@ -604,7 +638,7 @@ Create a message that:
 
 Error message:"""
         
-        # Call LLM
+        # Call LLM (standard - failure messages don't need memory)
         failure_message = await self.llm_client.generate(prompt)
         
         # Ensure it's user-friendly

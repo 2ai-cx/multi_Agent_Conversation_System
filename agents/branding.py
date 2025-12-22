@@ -111,7 +111,23 @@ Return JSON:
 Return ONLY valid JSON, no other text."""
 
         self.logger.info(f"🤖 [Branding] Asking LLM to format for {channel_key}...")
-        llm_response = await self.llm_client.generate(prompt)
+        
+        # ➕ NEW: Use memory-enabled generation if tenant_id available
+        tenant_id = user_context.get("tenant_id", "default")
+        user_id = user_context.get("user_id")
+        
+        # Try memory-enabled method first, fallback to regular if not available
+        if hasattr(self.llm_client, 'generate_with_memory') and tenant_id:
+            llm_response = await self.llm_client.generate_with_memory(
+                prompt=prompt,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                use_memory=True
+            )
+            self.logger.info(f"🧠 [Branding] Used memory-enabled LLM")
+        else:
+            llm_response = await self.llm_client.generate(prompt)
+            self.logger.info(f"🤖 [Branding] Used standard LLM (no memory)")
         
         # Parse LLM response
         try:

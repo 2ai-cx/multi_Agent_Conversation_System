@@ -574,45 +574,102 @@ class DailyReminderScheduleWorkflow:
             "results": results
         }
 
-# =============================================================================
 # CONVERSATION ACTIVITIES (from conversation_workflows.py)
 # =============================================================================
 
 @activity.defn
-async def load_conversation_history(user_id: str, limit: int = 5, agent_id: str = "conversation_agent") -> List[Dict[str, Any]]:
-    """Load conversation history from Supabase with timeout protection"""
-    logger.info(f"Loading conversation history for {user_id} (limit: {limit})")
-    
-    def _load_from_supabase():
-        """Internal function to load from Supabase"""
-        return _supabase_query(user_id, limit)
-    
-    def _supabase_query(user_id: str, limit: int):
-        """Execute Supabase query with error handling"""
-        if not worker.supabase_client:
-            logger.warning("⚠️ Supabase client not initialized - conversation history unavailable")
-            return []
-        
-        try:
-            # Get recent conversations in descending order, then reverse for chronological context
-            response = worker.supabase_client.table('conversations').select('user_id,content,platform,message_type,created_at').eq('user_id', user_id).order('created_at', desc=True).limit(limit * 2).execute()
-            
-            if response.data:
-                logger.info(f"✅ Loaded {len(response.data)} conversation messages for {user_id}")
-                return response.data
-            else:
-                logger.info(f"📝 No conversation history found for {user_id}")
-                return []
-        except Exception as schema_error:
-            logger.error(f"❌ Supabase schema error in load_conversation_history: {schema_error}")
-            return []
+async def load_memory_context(
+    user_id: str,
+    query: str,
+    tenant_id: str = "default",
+    limit: int = 5
+) -> List[str]:
+    """Load relevant memory context from Mem0/Qdrant"""
+    logger.info(f"🧠 Loading memory context for {user_id} with query: '{query[:50]}...'")
     
     try:
-        return _load_from_supabase()
+        from llm.client import LLMClient
+        from llm.config import LLMConfig
+        
+        # Initialize LLM client and get memory manager
+        config = LLMConfig()
+        if not config.rag_enabled:
+            logger.warning("⚠️ RAG/Memory not enabled, returning empty context")
+            return []
+        
+        client = LLMClient(config)
+        memory_manager = client.get_memory_manager(tenant_id)
+        
+        if not memory_manager:
+            logger.warning("⚠️ Memory manager not available")
+            return []
+        
+        # Retrieve relevant memories
+        context = await memory_manager.retrieve_context(
+            query=query,
+            k=limit,
+            filter={"user_id": user_id}
+        )
+        
+        logger.info(f"✅ Retrieved {len(context)} memory items from Mem0")
+        for i, mem in enumerate(context[:3]):  # Log first 3
+            logger.info(f"   Memory {i+1}: {mem[:100]}...")
+        
+        return context
+        
     except Exception as e:
-        logger.error(f"❌ Failed to load conversation history: {e}")
-        logger.error(f"🔍 DEBUG: General error type: {type(e)}")
+        logger.error(f"❌ Failed to load memory context: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return []
+
+@activity.defn
+async def store_memory(
+    user_id: str,
+    user_message: str,
+    ai_response: str,
+    tenant_id: str = "default",
+    metadata: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Store conversation in Mem0 memory"""
+    logger.info(f"🧠 Storing memory for {user_id}")
+    
+    try:
+        from llm.client import LLMClient
+        from llm.config import LLMConfig
+        
+        # Initialize LLM client and get memory manager
+        config = LLMConfig()
+        if not config.rag_enabled:
+            logger.warning("⚠️ RAG/Memory not enabled, skipping storage")
+            return {"status": "skipped", "reason": "rag_disabled"}
+        
+        client = LLMClient(config)
+        memory_manager = client.get_memory_manager(tenant_id)
+        
+        if not memory_manager:
+            logger.warning("⚠️ Memory manager not available")
+            return {"status": "skipped", "reason": "no_memory_manager"}
+        
+        # Prepare metadata
+        enhanced_metadata = metadata or {}
+        enhanced_metadata["user_id"] = user_id
+        
+        # Store conversation in Mem0
+        await memory_manager.add_conversation(
+            user_message=user_message,
+            ai_response=ai_response,
+            metadata=enhanced_metadata
+        )
+        
+        logger.info(f"✅ Memory stored in Mem0 for {user_id}")
+        return {"status": "success", "user_id": user_id}
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to store memory: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"status": "error", "error": str(e)}
 
 # Harvest MCP Tool Functions (Smart Routing: Direct Internal, KrakenD External)
 async def call_harvest_mcp_tool(tool_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -644,7 +701,8 @@ async def call_harvest_mcp_tool(tool_name: str, payload: Dict[str, Any]) -> Dict
         
         if use_direct_internal:
             # Direct internal call to MCP server (FASTER, MORE RELIABLE)
-            harvest_mcp_url = os.getenv('HARVEST_MCP_INTERNAL_URL', 'http://harvest-mcp.internal.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io')
+            # NOTE: Must use HTTPS - HTTP redirects to HTTPS which can change POST to GET
+            harvest_mcp_url = os.getenv('HARVEST_MCP_INTERNAL_URL', 'https://harvest-mcp.internal.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io')
             url = f"{harvest_mcp_url}/api/{tool_name}"
             logger.info(f"🔗 Direct internal MCP call: {tool_name}")
             logger.info(f"🔗 URL: {url}")
@@ -657,9 +715,15 @@ async def call_harvest_mcp_tool(tool_name: str, payload: Dict[str, Any]) -> Dict
         
         try:
             logger.info(f"📤 [HTTP] Sending POST request to {url}")
+            logger.info(f"📤 [HTTP] Payload keys: {list(payload.keys())}")
+            logger.info(f"📤 [HTTP] Using session.post() method")
+            
             response = session.post(url, json=payload)
+            
             logger.info(f"📥 [HTTP] Response status: {response.status_code}")
             logger.info(f"📥 [HTTP] Response headers: {dict(response.headers)}")
+            logger.info(f"📥 [HTTP] Request method used: {response.request.method}")
+            logger.info(f"📥 [HTTP] Final URL: {response.url}")
             
             response.raise_for_status()  # Raises exception for bad status codes
             
@@ -3562,10 +3626,43 @@ class MultiAgentConversationWorkflow:
             if not user_context.get("timezone"):
                 user_context["timezone"] = "UTC"
             
-            workflow.logger.info(f"✅ User context enriched: timezone={user_context.get('timezone')}, date={user_context.get('current_date')}")
+            # ➕ NEW: Add tenant_id and user_id for RAG memory
+            if not user_context.get("tenant_id"):
+                user_context["tenant_id"] = "default"  # TODO: Get from user record
+            if not user_context.get("user_id"):
+                user_context["user_id"] = user_id
             
-            # Step 1: Planner analyzes request
-            workflow.logger.info(f"📋 Step 1: Planner analyzing request")
+            workflow.logger.info(f"✅ User context enriched: timezone={user_context.get('timezone')}, date={user_context.get('current_date')}, tenant_id={user_context.get('tenant_id')}, user_id={user_context.get('user_id')}")
+            
+            # Step 1: Load memory context from Mem0
+            workflow.logger.info(f"🧠 Step 1a: Loading memory context")
+            memory_context = await workflow.execute_activity(
+                load_memory_context,
+                args=[
+                    user_id,
+                    user_message,
+                    user_context.get("tenant_id", "default"),
+                    5  # limit
+                ],
+                start_to_close_timeout=timedelta(seconds=3)
+            )
+            
+            # Convert memory context to conversation history format for backward compatibility
+            conversation_history = []
+            if memory_context:
+                workflow.logger.info(f"✅ Loaded {len(memory_context)} memory items")
+                # Add memories as system context
+                for mem in memory_context:
+                    conversation_history.append({
+                        "message_type": "MEMORY",
+                        "content": mem,
+                        "created_at": workflow.now().isoformat()
+                    })
+            else:
+                workflow.logger.info(f"📝 No memory context found")
+            
+            # Step 1b: Planner analyzes request
+            workflow.logger.info(f"📋 Step 1b: Planner analyzing request")
             plan_result = await workflow.execute_activity(
                 planner_analyze_activity,
                 args=[request_id, user_message, channel, conversation_history, user_context],
@@ -3752,8 +3849,27 @@ class MultiAgentConversationWorkflow:
             except Exception as e:
                 workflow.logger.error(f"❌ Failed to send {channel} response: {e}")
             
-            # Step 9: Store conversation in Supabase
-            workflow.logger.info(f"💾 Step 9: Storing conversation")
+            # Step 9: Store conversation in Mem0 memory
+            workflow.logger.info(f"🧠 Step 9: Storing conversation in Mem0")
+            try:
+                memory_result = await workflow.execute_activity(
+                    store_memory,
+                    args=[
+                        user_id,
+                        user_message,
+                        final_response,
+                        user_context.get("tenant_id", "default"),
+                        {"channel": channel, "conversation_id": conversation_id}
+                    ],
+                    start_to_close_timeout=timedelta(seconds=5),
+                    retry_policy=RetryPolicy(maximum_attempts=2)
+                )
+                workflow.logger.info(f"✅ Memory stored" if memory_result["status"] == "success" else f"⚠️ Memory storage {memory_result['status']}: {memory_result.get('reason', memory_result.get('error'))}")
+            except Exception as e:
+                workflow.logger.error(f"❌ Failed to store memory: {e}")
+            
+            # Step 9b: Also store in Supabase for backup/audit trail
+            workflow.logger.info(f"💾 Step 9b: Storing conversation in Supabase")
             try:
                 store_result = await workflow.execute_activity(
                     store_conversation,

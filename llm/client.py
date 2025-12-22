@@ -92,6 +92,7 @@ class LLMClient:
         self._opik_tracker = None
         self._cache = None
         self._tenant_key_manager = None
+        self._memory_managers = {}  # ➕ NEW: Cache memory managers per tenant
         
         # Initialize logger
         import logging
@@ -412,6 +413,12 @@ class LLMClient:
             # Tenant key manager doesn't need explicit close
             pass
         
+        # ➕ NEW: Close memory managers
+        for memory in self._memory_managers.values():
+            # Memory managers don't need explicit close
+            pass
+        self._memory_managers.clear()
+        
         self.logger.info("LLM client closed")
     
     # JSON Minification Helpers
@@ -468,6 +475,213 @@ class LLMClient:
         
         # Expand abbreviated keys
         return expand_from_llm(json_str)
+    
+    # ==========================================
+    # RAG Memory Methods (NEW)
+    # ==========================================
+    
+    def get_memory_manager(self, tenant_id: str):
+        """
+        Get or create memory manager for tenant
+        
+        Args:
+            tenant_id: Tenant ID
+        
+        Returns:
+            LLMMemoryManager instance or None if RAG disabled
+        """
+        if not self.config.rag_enabled:
+            return None
+        
+        if tenant_id not in self._memory_managers:
+            from llm.memory import LLMMemoryManager
+            self._memory_managers[tenant_id] = LLMMemoryManager(
+                tenant_id=tenant_id,
+                config=self.config
+            )
+            self.logger.info(f"Created memory manager for tenant: {tenant_id}")
+        
+        return self._memory_managers[tenant_id]
+    
+    async def chat_completion_with_memory(
+        self,
+        messages: List[Dict[str, str]],
+        tenant_id: str,
+        user_id: Optional[str] = None,
+        use_memory: bool = True,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Chat completion with long-term memory retrieval (RAG)
+        
+        This method:
+        1. Retrieves relevant context from vector store
+        2. Injects context into system message
+        3. Calls existing chat_completion (keeps ALL features)
+        4. Stores conversation in vector store
+        
+        Args:
+            messages: List of messages
+            tenant_id: Tenant ID (required for memory)
+            user_id: User ID
+            use_memory: Whether to use memory (default: True)
+            temperature: Temperature override
+            max_tokens: Max tokens override
+            **kwargs: Additional parameters
+        
+        Returns:
+            LLMResponse with content and metadata
+        """
+        import time
+        start_time = time.time()
+        
+        # Check if RAG enabled
+        if not self.config.rag_enabled or not use_memory or not tenant_id:
+            # Fall back to regular chat_completion
+            return await self.chat_completion(
+                messages=messages,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs
+            )
+        
+        # Get memory manager
+        memory = self.get_memory_manager(tenant_id)
+        if not memory:
+            # Fall back if memory not available
+            return await self.chat_completion(
+                messages=messages,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs
+            )
+        
+        # Extract user message
+        user_message = messages[-1]["content"] if messages else ""
+        
+        # Retrieve relevant context
+        try:
+            context = await memory.retrieve_context(
+                query=user_message,
+                filter={"user_id": user_id} if user_id else None
+            )
+            
+            # Inject context into messages
+            if context:
+                # Format context with clear instructions for the LLM
+                context_lines = []
+                for i, ctx in enumerate(context, 1):
+                    context_lines.append(f"{i}. {ctx}")
+                
+                context_message = {
+                    "role": "system",
+                    "content": (
+                        "IMPORTANT: The following information was retrieved from the user's past conversations. "
+                        "Use this context to answer their question accurately:\n\n"
+                        + "\n".join(context_lines)
+                        + "\n\nWhen answering, directly reference this information if relevant to the user's question."
+                    )
+                }
+                # Insert after system message if exists, otherwise prepend
+                if messages and messages[0]["role"] == "system":
+                    messages = [messages[0], context_message] + messages[1:]
+                else:
+                    messages = [context_message] + messages
+                
+                self.logger.info(f"Injected {len(context)} memories into prompt")
+                self.logger.debug(f"Context: {context_lines}")
+        
+        except Exception as e:
+            self.logger.warning(f"Failed to retrieve memory context: {e}")
+            # Continue without context
+        
+        # Call existing chat_completion (keeps ALL features)
+        response = await self.chat_completion(
+            messages=messages,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        
+        # Store conversation in memory
+        try:
+            await memory.add_conversation(
+                user_message=user_message,
+                ai_response=response.content,
+                metadata={
+                    "user_id": user_id,
+                    "model": response.model,
+                    "tokens": response.total_tokens,
+                    "cost": response.cost_usd,
+                    "cached": response.cached,
+                    "latency_ms": response.latency_ms
+                }
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to store conversation in memory: {e}")
+            # Continue - don't fail the request
+        
+        # Track memory latency
+        memory_latency_ms = (time.time() - start_time) * 1000 - response.latency_ms
+        response.metadata["memory_latency_ms"] = memory_latency_ms
+        response.metadata["memory_enabled"] = True
+        
+        return response
+    
+    async def generate_with_memory(
+        self,
+        prompt: str,
+        tenant_id: str,
+        user_id: Optional[str] = None,
+        use_memory: bool = True,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """
+        Generate text from a prompt with long-term memory (convenience method)
+        
+        This is a convenience wrapper around chat_completion_with_memory()
+        that converts a simple prompt into a chat message format.
+        
+        Args:
+            prompt: Text prompt
+            tenant_id: Tenant ID (required for memory)
+            user_id: User ID
+            use_memory: Whether to use memory (default: True)
+            temperature: Override default temperature
+            max_tokens: Override default max_tokens
+            **kwargs: Additional provider-specific parameters
+        
+        Returns:
+            Generated text content
+        
+        Example:
+            response = await client.generate_with_memory(
+                prompt="How many hours did I log last week?",
+                tenant_id="tenant-123",
+                user_id="user-456"
+            )
+        """
+        messages = [{"role": "user", "content": prompt}]
+        response = await self.chat_completion_with_memory(
+            messages=messages,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            use_memory=use_memory,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        return response.content
 
 
 # Convenience function for quick usage

@@ -1,0 +1,416 @@
+[0;34m🚀 Multi-Agent System - Build and Deploy[0m
+==================================================
+
+Configuration:
+  Registry: secureagentreg2ai.azurecr.io
+  Image: secureagentreg2ai.azurecr.io/multi-agent-system:1.0.0-20251201-183705
+  Resource Group: rg-secure-timesheet-agent
+  Container App: unified-temporal-worker
+  Key Vault: https://kv-secure-agent-2ai.vault.azure.net/
+
+[0;32m✅ Starting automated deployment...[0m
+
+
+[1;33m🔍 Step 1: Checking Prerequisites[0m
+[0;32m✅ Docker installed[0m
+[0;32m✅ Azure CLI installed[0m
+[0;32m✅ Azure CLI authenticated[0m
+
+[1;33m🔨 Step 2: Building Docker Image[0m
+Building: secureagentreg2ai.azurecr.io/multi-agent-system:1.0.0-20251201-183705
+
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 891B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.11-slim
+#2 DONE 2.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 656B done
+#3 DONE 0.0s
+
+#4 [1/7] FROM docker.io/library/python:3.11-slim@sha256:193fdd0bbcb3d2ae612bd6cc3548d2f7c78d65b549fcaa8af75624c47474444d
+#4 resolve docker.io/library/python:3.11-slim@sha256:193fdd0bbcb3d2ae612bd6cc3548d2f7c78d65b549fcaa8af75624c47474444d 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 53.44kB done
+#5 DONE 0.0s
+
+#6 [4/7] COPY requirements.txt .
+#6 CACHED
+
+#7 [2/7] WORKDIR /app
+#7 CACHED
+
+#8 [3/7] RUN apt-get update && apt-get install -y     gcc     g++     curl     && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [5/7] RUN pip install --no-cache-dir -r requirements.txt
+#9 CACHED
+
+#10 [6/7] COPY . .
+#10 DONE 0.0s
+
+#11 [7/7] RUN useradd -m -u 1000 appuser &&     chown -R appuser:appuser /app
+#11 DONE 0.3s
+
+#12 exporting to image
+#12 exporting layers 0.0s done
+#12 exporting manifest sha256:54bd08bc5cb9520e6aaaf1d5c5a92603d36e81131fafb0cdc70d666d0aa5f7e4 done
+#12 exporting config sha256:2eb2b56bedeeb98fc669c5a9c723637b6e7fee48d38ddffad950c38fcea4d6a1 done
+#12 exporting attestation manifest sha256:f370d5aaef4351d67f26c7040c5bed2c94714574dd13458c0bcee7589cae02cd done
+#12 exporting manifest list sha256:1b7a2d02eda0159971183959250b15f963086bfb56c6c7f7846d4dc5bbc55d17 done
+#12 naming to secureagentreg2ai.azurecr.io/multi-agent-system:1.0.0-20251201-183705 done
+#12 naming to secureagentreg2ai.azurecr.io/multi-agent-system:latest done
+#12 DONE 0.1s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/ehg94w8qhlun5iqa06nvm2lcr
+[0;32m✅ Docker image built successfully[0m
+
+[1;33m🔐 Step 3: Logging in to Azure Container Registry[0m
+Login Succeeded
+[0;32m✅ Logged in to ACR[0m
+
+[1;33m📤 Step 4: Pushing Image to Registry[0m
+Pushing: secureagentreg2ai.azurecr.io/multi-agent-system:1.0.0-20251201-183705
+
+The push refers to repository [secureagentreg2ai.azurecr.io/multi-agent-system]
+e7c532a6fdec: Waiting
+0e4bc2bd6656: Waiting
+22b63e76fde1: Waiting
+396572f786b5: Waiting
+786968023522: Waiting
+1771569cc129: Waiting
+b3dd773c3296: Waiting
+e7a4a8fb37f5: Waiting
+ad71deec4ece: Waiting
+83023049eb04: Waiting
+c65575667c4c: Waiting
+22b63e76fde1: Layer already exists
+396572f786b5: Waiting
+786968023522: Waiting
+1771569cc129: Waiting
+b3dd773c3296: Layer already exists
+e7a4a8fb37f5: Layer already exists
+ad71deec4ece: Waiting
+83023049eb04: Waiting
+c65575667c4c: Waiting
+e7c532a6fdec: Waiting
+0e4bc2bd6656: Waiting
+1771569cc129: Layer already exists
+83023049eb04: Layer already exists
+0e4bc2bd6656: Layer already exists
+396572f786b5: Layer already exists
+786968023522: Layer already exists
+ad71deec4ece: Pushed
+e7c532a6fdec: Pushed
+c65575667c4c: Pushed
+1.0.0-20251201-183705: digest: sha256:1b7a2d02eda0159971183959250b15f963086bfb56c6c7f7846d4dc5bbc55d17 size: 856
+The push refers to repository [secureagentreg2ai.azurecr.io/multi-agent-system]
+83023049eb04: Waiting
+396572f786b5: Waiting
+b3dd773c3296: Layer already exists
+ad71deec4ece: Waiting
+e7c532a6fdec: Waiting
+1771569cc129: Waiting
+e7a4a8fb37f5: Waiting
+786968023522: Layer already exists
+0e4bc2bd6656: Waiting
+c65575667c4c: Waiting
+22b63e76fde1: Waiting
+ad71deec4ece: Already exists
+e7c532a6fdec: Waiting
+1771569cc129: Layer already exists
+e7a4a8fb37f5: Layer already exists
+0e4bc2bd6656: Layer already exists
+c65575667c4c: Layer already exists
+22b63e76fde1: Layer already exists
+83023049eb04: Layer already exists
+396572f786b5: Layer already exists
+e7c532a6fdec: Layer already exists
+latest: digest: sha256:1b7a2d02eda0159971183959250b15f963086bfb56c6c7f7846d4dc5bbc55d17 size: 856
+[0;32m✅ Image pushed successfully[0m
+
+[1;33m🚀 Step 5: Deploying to Azure Container Apps[0m
+Updating container app: unified-temporal-worker
+
+WARNING: The behavior of this command has been altered by the following extension: containerapp
+/ Running ..| Running ..\ Running ..- Running ../ Running ..| Running ..[K{
+  "id": "/subscriptions/a1b2796a-ee0f-4aa9-83b9-65ddc9f0cdb0/resourceGroups/rg-secure-timesheet-agent/providers/Microsoft.App/containerapps/unified-temporal-worker",
+  "identity": {
+    "principalId": "e603b0be-dcff-4d24-bfcf-f124096e93c2",
+    "tenantId": "fdb8447c-9b3f-4eae-ab25-fa0caeb86d11",
+    "type": "SystemAssigned"
+  },
+  "location": "Australia East",
+  "name": "unified-temporal-worker",
+  "properties": {
+    "configuration": {
+      "activeRevisionsMode": "Single",
+      "dapr": null,
+      "identitySettings": [],
+      "ingress": {
+        "additionalPortMappings": null,
+        "allowInsecure": false,
+        "clientCertificateMode": null,
+        "corsPolicy": null,
+        "customDomains": null,
+        "exposedPort": 0,
+        "external": true,
+        "fqdn": "unified-temporal-worker.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io",
+        "ipSecurityRestrictions": null,
+        "stickySessions": null,
+        "targetPort": 8003,
+        "targetPortHttpScheme": null,
+        "traffic": [
+          {
+            "latestRevision": true,
+            "weight": 100
+          }
+        ],
+        "transport": "Auto"
+      },
+      "maxInactiveRevisions": null,
+      "registries": [
+        {
+          "identity": "system",
+          "passwordSecretRef": "",
+          "server": "secureagentreg2ai.azurecr.io",
+          "username": ""
+        }
+      ],
+      "revisionTransitionThreshold": null,
+      "runtime": null,
+      "secrets": [
+        {
+          "name": "azure-key-vault-url"
+        }
+      ],
+      "service": null,
+      "targetLabel": ""
+    },
+    "customDomainVerificationId": "9AC169C7AEB8E433EDB23952C1E71EC3F89CCE3EDC9095B6C7EA91FA1692D591",
+    "delegatedIdentities": [],
+    "environmentId": "/subscriptions/a1b2796a-ee0f-4aa9-83b9-65ddc9f0cdb0/resourceGroups/rg-secure-timesheet-agent/providers/Microsoft.App/managedEnvironments/secure-timesheet-env",
+    "eventStreamEndpoint": "https://australiaeast.azurecontainerapps.dev/subscriptions/a1b2796a-ee0f-4aa9-83b9-65ddc9f0cdb0/resourceGroups/rg-secure-timesheet-agent/containerApps/unified-temporal-worker/eventstream",
+    "latestReadyRevisionName": "unified-temporal-worker--0000187",
+    "latestRevisionFqdn": "unified-temporal-worker--0000188.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io",
+    "latestRevisionName": "unified-temporal-worker--0000188",
+    "managedEnvironmentId": "/subscriptions/a1b2796a-ee0f-4aa9-83b9-65ddc9f0cdb0/resourceGroups/rg-secure-timesheet-agent/providers/Microsoft.App/managedEnvironments/secure-timesheet-env",
+    "outboundIpAddresses": [
+      "20.92.129.121",
+      "20.53.190.131",
+      "4.237.240.85",
+      "20.227.106.31",
+      "4.254.34.254",
+      "4.254.99.26",
+      "4.254.80.186",
+      "4.237.200.41",
+      "4.237.254.48",
+      "4.198.0.55",
+      "4.237.250.197",
+      "4.200.103.209",
+      "20.53.190.243",
+      "20.227.117.222",
+      "20.92.129.47",
+      "20.53.142.228",
+      "20.53.137.166",
+      "20.53.136.251",
+      "20.53.137.23",
+      "20.53.136.177",
+      "20.53.139.235",
+      "20.227.4.70",
+      "20.227.4.57",
+      "4.237.187.120",
+      "20.167.19.2",
+      "4.254.25.176",
+      "20.227.69.22",
+      "20.227.101.87",
+      "4.254.45.25",
+      "20.167.107.223",
+      "4.254.68.189",
+      "4.200.63.136",
+      "4.237.252.211",
+      "20.227.4.60",
+      "4.254.104.192",
+      "4.254.7.59",
+      "4.237.151.212",
+      "20.227.4.52",
+      "20.11.108.13",
+      "20.11.108.40",
+      "20.11.107.220",
+      "20.11.107.247",
+      "20.11.107.106",
+      "20.11.108.46",
+      "20.167.110.81"
+    ],
+    "patchingMode": "Automatic",
+    "provisioningState": "Succeeded",
+    "runningStatus": "Running",
+    "template": {
+      "containers": [
+        {
+          "env": [
+            {
+              "name": "AZURE_KEY_VAULT_URL"
+            },
+            {
+              "name": "TEMPORAL_HOST"
+            },
+            {
+              "name": "TEMPORAL_NAMESPACE"
+            },
+            {
+              "name": "TEMPORAL_TLS_ENABLED"
+            },
+            {
+              "name": "KRAKEND_GATEWAY_URL"
+            },
+            {
+              "name": "OPIK_ENABLED"
+            },
+            {
+              "name": "USE_HARVEST_MCP_DIRECT"
+            },
+            {
+              "name": "PORT"
+            },
+            {
+              "name": "TEMPORAL_TEST_MODE"
+            },
+            {
+              "name": "RESTART_TRIGGER"
+            },
+            {
+              "name": "HTTP2_TRANSPORT"
+            },
+            {
+              "name": "HARVEST_MCP_INTERNAL_URL"
+            },
+            {
+              "name": "USE_OPENROUTER"
+            },
+            {
+              "name": "STARTUP_PROBE"
+            },
+            {
+              "name": "USE_DIRECT_INTERNAL_CALLS"
+            }
+          ],
+          "image": "secureagentreg2ai.azurecr.io/multi-agent-system:1.0.0-20251201-183705",
+          "imageType": "ContainerImage",
+          "name": "unified-temporal-worker",
+          "resources": {
+            "cpu": 1.25,
+            "ephemeralStorage": "8Gi",
+            "memory": "2.5Gi"
+          }
+        }
+      ],
+      "initContainers": null,
+      "revisionSuffix": "",
+      "scale": {
+        "cooldownPeriod": 300,
+        "maxReplicas": 3,
+        "minReplicas": 1,
+        "pollingInterval": 30,
+        "rules": null
+      },
+      "serviceBinds": null,
+      "terminationGracePeriodSeconds": null,
+      "volumes": null
+    },
+    "workloadProfileName": "Consumption"
+  },
+  "resourceGroup": "rg-secure-timesheet-agent",
+  "systemData": {
+    "createdAt": "2025-10-07T07:07:40.4691075",
+    "createdBy": "Dongshu@2ai.cx",
+    "createdByType": "User",
+    "lastModifiedAt": "2025-12-01T07:37:14.7613113",
+    "lastModifiedBy": "Dongshu@2ai.cx",
+    "lastModifiedByType": "User"
+  },
+  "type": "Microsoft.App/containerApps"
+}
+[0;32m✅ Deployment successful[0m
+
+[1;33m🌐 Step 6: Getting Application URL[0m
+WARNING: The behavior of this command has been altered by the following extension: containerapp
+[0;32m✅ Application URL: https://unified-temporal-worker.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io[0m
+
+[1;33m⏳ Step 7: Waiting for Deployment[0m
+Waiting 45 seconds for container to start...
+
+[1;33m🏥 Step 8: Testing Health Endpoint[0m
+[0;32m✅ Health check passed[0m
+
+[1;33m📋 Step 9: Recent Logs[0m
+{"TimeStamp": "2025-12-01T07:38:15.73836", "Log": "Connecting to the container 'unified-temporal-worker'..."}
+{"TimeStamp": "2025-12-01T07:38:15.77108", "Log": "Successfully Connected to container: 'unified-temporal-worker' [Revision: 'unified-temporal-worker--0000188', Replica: 'unified-temporal-worker--0000188-84c98b9f4-pxrhn']"}
+{"TimeStamp": "2025-12-01T07:37:38.4385592+00:00", "Log": "F INFO:unified_server:\u2705 INBOX selected successfully!"}
+{"TimeStamp": "2025-12-01T07:37:38.4385965+00:00", "Log": "F INFO:unified_server:\ud83d\udd0d Searching for unread emails..."}
+{"TimeStamp": "2025-12-01T07:37:38.8990954+00:00", "Log": "F INFO:unified_server:\ud83d\udcca Search status: OK"}
+{"TimeStamp": "2025-12-01T07:37:38.8991562+00:00", "Log": "F INFO:unified_server:\ud83d\udcec Found 0 unread emails: []"}
+{"TimeStamp": "2025-12-01T07:37:38.8992144+00:00", "Log": "F INFO:unified_server:\ud83d\udd04 Processing 0 emails (last 5 of 0 total)..."}
+{"TimeStamp": "2025-12-01T07:37:39.3267121+00:00", "Log": "F INFO:unified_server:\ud83d\udcca Gmail polling result: {'status': 'success', 'emails_found': 0, 'emails_processed': 0}"}
+{"TimeStamp": "2025-12-01T07:37:39.3267562+00:00", "Log": "F INFO:unified_server:\ud83d\udced No new emails found (checked 0 total)"}
+{"TimeStamp": "2025-12-01T07:37:39.3267716+00:00", "Log": "F INFO:unified_server:\u23f0 Waiting 30 seconds before next Gmail check..."}
+{"TimeStamp": "2025-12-01T07:37:39.3268557+00:00", "Log": "F INFO:     Application startup complete."}
+{"TimeStamp": "2025-12-01T07:37:39.3273744+00:00", "Log": "F ERROR:unified_server:\u274c Failed to setup schedules: Schedule already running"}
+{"TimeStamp": "2025-12-01T07:37:39.3275152+00:00", "Log": "F INFO:     Uvicorn running on http://0.0.0.0:8003 (Press CTRL+C to quit)"}
+{"TimeStamp": "2025-12-01T07:38:09.3279188+00:00", "Log": "F INFO:unified_server:\ud83d\udd04 Gmail polling cycle #2 starting..."}
+{"TimeStamp": "2025-12-01T07:38:09.3279666+00:00", "Log": "F INFO:unified_server:\ud83d\udd0d Starting Gmail IMAP connection..."}
+{"TimeStamp": "2025-12-01T07:38:09.3279835+00:00", "Log": "F INFO:unified_server:\ud83d\udd11 Loading Gmail credentials from environment..."}
+{"TimeStamp": "2025-12-01T07:38:09.328054+00:00", "Log": "F INFO:unified_server:\ud83d\udce7 Gmail user: 2aido***@gmail.com"}
+{"TimeStamp": "2025-12-01T07:38:09.3280724+00:00", "Log": "F INFO:unified_server:\ud83d\udd10 Gmail password: ***jit"}
+{"TimeStamp": "2025-12-01T07:38:09.3280775+00:00", "Log": "F INFO:unified_server:\ud83d\udd17 Connecting to Gmail IMAP server..."}
+{"TimeStamp": "2025-12-01T07:38:10.0317015+00:00", "Log": "F INFO:unified_server:\ud83d\udd10 Authenticating with Gmail..."}
+{"TimeStamp": "2025-12-01T07:38:11.5903397+00:00", "Log": "F INFO:unified_server:\u2705 Gmail authentication successful!"}
+{"TimeStamp": "2025-12-01T07:38:11.5903766+00:00", "Log": "F INFO:unified_server:\ud83d\udcc1 Selecting INBOX folder..."}
+{"TimeStamp": "2025-12-01T07:38:12.0344294+00:00", "Log": "F INFO:unified_server:\u2705 INBOX selected successfully!"}
+{"TimeStamp": "2025-12-01T07:38:12.0344679+00:00", "Log": "F INFO:unified_server:\ud83d\udd0d Searching for unread emails..."}
+{"TimeStamp": "2025-12-01T07:38:12.4754569+00:00", "Log": "F INFO:unified_server:\ud83d\udcca Search status: OK"}
+{"TimeStamp": "2025-12-01T07:38:12.4754952+00:00", "Log": "F INFO:unified_server:\ud83d\udcec Found 0 unread emails: []"}
+{"TimeStamp": "2025-12-01T07:38:12.4755219+00:00", "Log": "F INFO:unified_server:\ud83d\udd04 Processing 0 emails (last 5 of 0 total)..."}
+{"TimeStamp": "2025-12-01T07:38:12.9136813+00:00", "Log": "F INFO:unified_server:\ud83d\udcca Gmail polling result: {'status': 'success', 'emails_found': 0, 'emails_processed': 0}"}
+{"TimeStamp": "2025-12-01T07:38:12.913734+00:00", "Log": "F INFO:unified_server:\ud83d\udced No new emails found (checked 0 total)"}
+{"TimeStamp": "2025-12-01T07:38:12.9137482+00:00", "Log": "F INFO:unified_server:\u23f0 Waiting 30 seconds before next Gmail check..."}
+{"TimeStamp": "2025-12-01T07:38:12.9145896+00:00", "Log": "F INFO:     100.100.0.179:50426 - \"GET /health HTTP/1.1\" 200 OK"}
+{"TimeStamp": "2025-12-01T07:38:13.5870384+00:00", "Log": "F INFO:     100.100.0.179:50438 - \"GET / HTTP/1.1\" 404 Not Found"}
+
+==================================================
+[0;32m🎉 Deployment Complete![0m
+==================================================
+
+📊 Deployment Summary:
+  Image: secureagentreg2ai.azurecr.io/multi-agent-system:1.0.0-20251201-183705
+  Container App: unified-temporal-worker
+  URL: https://unified-temporal-worker.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io
+  Health: 200
+
+🔍 Next Steps:
+
+1. Check logs:
+   az containerapp logs show --name unified-temporal-worker --resource-group rg-secure-timesheet-agent --follow
+
+2. Test health endpoint:
+   curl https://unified-temporal-worker.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io/health
+
+3. Update Twilio webhooks:
+   SMS: https://unified-temporal-worker.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io/webhook/sms
+   WhatsApp: https://unified-temporal-worker.kindcoast-5a2a34c6.australiaeast.azurecontainerapps.io/webhook/whatsapp
+
+4. Send test SMS to your Twilio number:
+   'Check my timesheet'
+
+5. Monitor workflows:
+   Temporal: https://cloud.temporal.io
+   Opik: https://www.comet.com/opik
+
+[0;32m✅ Multi-Agent System is Live![0m
+

@@ -1,0 +1,49 @@
+/opt/anaconda3/lib/python3.13/site-packages/pytest_asyncio/plugin.py:252: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform darwin -- Python 3.13.5, pytest-8.3.4, pluggy-1.5.0 -- /opt/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/dongshulin/Library/CloudStorage/OneDrive-2ai.cx/Desktop/GitHub/multi_Agent_Conversation_System
+plugins: opik-1.8.34, langsmith-0.4.17, asyncio-1.2.0, anyio-4.12.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 21 items
+
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_single_memory_storage_and_retrieval PASSED [  4%]
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_multiple_memories_retrieval PASSED [  9%]
+tests/test_mem0_qdrant_integration.py::TestBasicMemoryOperations::test_memory_persistence_across_sessions PASSED [ 14%]
+tests/test_mem0_qdrant_integration.py::TestMultiTenantIsolation::test_tenant_isolation PASSED [ 19%]
+tests/test_mem0_qdrant_integration.py::TestMultiTenantIsolation::test_user_isolation_within_tenant PASSED [ 23%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_empty_query FAILED [ 28%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_very_long_conversation PASSED [ 33%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_special_characters PASSED [ 38%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_unicode_and_emoji PASSED [ 42%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_duplicate_memories PASSED [ 47%]
+tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_contradictory_information PASSED [ 52%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_storage_latency PASSED [ 57%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_retrieval_latency PASSED [ 61%]
+tests/test_mem0_qdrant_integration.py::TestPerformance::test_concurrent_users PASSED [ 66%]
+tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_numeric_data_accuracy PASSED [ 71%]
+tests/test_mem0_qdrant_integration.py::TestDataIntegrity::test_date_and_time_information PASSED [ 76%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_invalid_tenant_id PASSED [ 80%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_missing_user_id PASSED [ 85%]
+tests/test_mem0_qdrant_integration.py::TestReliability::test_malformed_request FAILED [ 90%]
+tests/test_mem0_qdrant_integration.py::TestSemanticSearch::test_semantic_similarity PASSED [ 95%]
+tests/test_mem0_qdrant_integration.py::TestSemanticSearch::test_context_understanding PASSED [100%]
+
+=================================== FAILURES ===================================
+________________________ TestEdgeCases.test_empty_query ________________________
+tests/test_mem0_qdrant_integration.py:180: in test_empty_query
+    assert response.status_code in [200, 400]
+E   assert 500 in [200, 400]
+E    +  where 500 = <Response [500]>.status_code
+____________________ TestReliability.test_malformed_request ____________________
+tests/test_mem0_qdrant_integration.py:449: in test_malformed_request
+    assert response.status_code in [400, 422]
+E   assert 500 in [400, 422]
+E    +  where 500 = <Response [500]>.status_code
+=========================== short test summary info ============================
+FAILED tests/test_mem0_qdrant_integration.py::TestEdgeCases::test_empty_query
+FAILED tests/test_mem0_qdrant_integration.py::TestReliability::test_malformed_request
+=================== 2 failed, 19 passed in 306.83s (0:05:06) ===================

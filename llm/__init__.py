@@ -13,6 +13,8 @@ Key Features:
 - Token usage tracking and cost attribution
 - Response caching for cost optimization
 - JSON minification for 30-50% token savings
+- RAG (Retrieval-Augmented Generation) with vector stores (NEW)
+- Long-term memory management (NEW)
 
 Usage:
     from llm.client import LLMClient
@@ -32,17 +34,34 @@ Usage:
     expanded = client.expand_json_response(llm_response)
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"  # ➕ Updated for RAG support
 
 from llm.config import LLMConfig
 from llm.client import LLMClient, LLMResponse
 from llm.json_minifier import minify_for_llm, expand_from_llm, get_minification_instruction
 
+# ➕ NEW: RAG components (lazy import to avoid dependencies if not used)
+def _get_memory_manager():
+    from llm.memory import LLMMemoryManager
+    return LLMMemoryManager
+
+def _get_embeddings_provider():
+    from llm.embeddings import EmbeddingsProvider
+    return EmbeddingsProvider
+
 __all__ = [
+    # Core components
     "LLMConfig",
     "LLMClient", 
     "LLMResponse",
+    
+    # JSON minification
     "minify_for_llm",
     "expand_from_llm",
-    "get_minification_instruction"
+    "get_minification_instruction",
+    
+    # ➕ NEW: RAG components (lazy loaded)
+    # Import these only if RAG is enabled:
+    # from llm.memory import LLMMemoryManager
+    # from llm.embeddings import EmbeddingsProvider
 ]

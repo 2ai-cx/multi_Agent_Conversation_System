@@ -1,0 +1,27 @@
+sms:
+  max_length: 1600
+  supports_markdown: false
+  markdown_features: []
+  supports_emojis: true
+  split_strategy: "sentence"
+
+email:
+  max_length: null
+  supports_markdown: true
+  markdown_features: ["bold", "italic", "headers", "tables", "links", "code"]
+  supports_emojis: true
+  split_strategy: "paragraph"
+
+whatsapp:
+  max_length: 4000
+  supports_markdown: true
+  markdown_features: ["bold", "italic"]
+  supports_emojis: true
+  split_strategy: "paragraph"
+
+teams:
+  max_length: null
+  supports_markdown: true
+  markdown_features: ["bold", "italic", "headers", "links"]
+  supports_emojis: true
+  split_strategy: "paragraph"

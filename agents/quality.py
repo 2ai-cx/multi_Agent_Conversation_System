@@ -137,7 +137,8 @@ Answer with "yes" if it passes, or "no - [specific reason]" if it fails.
 
 Evaluation:"""
         
-        # Call LLM
+        # Call LLM (standard - quality validation doesn't need memory)
+        # Note: Quality validation is criteria-based, not context-dependent
         evaluation = await self.llm_client.generate(prompt)
         
         # Parse evaluation

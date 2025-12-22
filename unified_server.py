@@ -94,7 +94,16 @@ def load_secrets_to_env():
             "REDIS-ENABLED": "REDIS_ENABLED",
             "FALLBACK-ENABLED": "FALLBACK_ENABLED",
             "RETRY-MAX-WAIT-SECONDS": "RETRY_MAX_WAIT_SECONDS",
-            "USE-IMPROVED-RATE-LIMITER": "USE_IMPROVED_RATE_LIMITER"
+            "USE-IMPROVED-RATE-LIMITER": "USE_IMPROVED_RATE_LIMITER",
+            # RAG / Vector Database Configuration
+            "RAG-ENABLED": "RAG_ENABLED",
+            "VECTOR-DB-PROVIDER": "VECTOR_DB_PROVIDER",
+            "QDRANT-URL": "QDRANT_URL",
+            "QDRANT-API-KEY": "QDRANT_API_KEY",
+            "QDRANT-COLLECTION-NAME": "QDRANT_COLLECTION_NAME",
+            "EMBEDDINGS-PROVIDER": "EMBEDDINGS_PROVIDER",
+            "EMBEDDINGS-MODEL": "EMBEDDINGS_MODEL",
+            "EMBEDDINGS-DIMENSION": "EMBEDDINGS_DIMENSION"
         }
         
         # DEBUG: Print all secret mappings to verify Harvest secrets are included
@@ -138,8 +147,11 @@ from unified_workflows import (
     send_platform_response,
     send_email_response,
     send_whatsapp_response,
-    load_conversation_history,
     log_conversation_metrics,
+    
+    # NEW: Mem0 memory activities
+    load_memory_context,
+    store_memory,
     
     # Worker instance
     worker as unified_worker,
@@ -410,8 +422,11 @@ class UnifiedTemporalServer:
                     send_platform_response,
                     send_email_response,
                     send_whatsapp_response,
-                    load_conversation_history,
                     log_conversation_metrics,
+                    
+                    # NEW: Mem0 memory activities
+                    load_memory_context,
+                    store_memory,
                     
                     # Multi-agent activities (REPLACED single-agent)
                     get_user_credentials_activity,  # NEW: Fetch credentials from Supabase
@@ -948,6 +963,136 @@ async def send_timesheet_reminder_direct(user_id: str, user_name: str, phone_num
 # TIMESHEET ENDPOINTS (from temporal_server.py)
 # =============================================================================
 
+
+@app.get("/debug/rag-status")
+async def debug_rag_status():
+    """Debug endpoint to check RAG configuration and environment"""
+    import os
+    from llm.config import LLMConfig
+    
+    try:
+        # Check environment variables
+        env_status = {
+            "RAG_ENABLED": os.getenv("RAG_ENABLED"),
+            "VECTOR_DB_PROVIDER": os.getenv("VECTOR_DB_PROVIDER"),
+            "QDRANT_URL": os.getenv("QDRANT_URL"),
+            "QDRANT_API_KEY": "SET" if os.getenv("QDRANT_API_KEY") else "NOT SET",
+            "QDRANT_COLLECTION_NAME": os.getenv("QDRANT_COLLECTION_NAME"),
+            "EMBEDDINGS_PROVIDER": os.getenv("EMBEDDINGS_PROVIDER"),
+            "EMBEDDINGS_MODEL": os.getenv("EMBEDDINGS_MODEL"),
+            "EMBEDDINGS_DIMENSION": os.getenv("EMBEDDINGS_DIMENSION"),
+            "OPENAI_API_KEY": "SET" if os.getenv("OPENAI_API_KEY") else "NOT SET"
+        }
+        
+        # Try to load config
+        try:
+            config = LLMConfig()
+            config_status = {
+                "rag_enabled": config.rag_enabled,
+                "vector_db_provider": config.vector_db_provider,
+                "qdrant_url": config.qdrant_url,
+                "embeddings_provider": config.embeddings_provider,
+                "embeddings_model": config.embeddings_model,
+                "openai_api_key_set": bool(config.openai_api_key)
+            }
+        except Exception as e:
+            config_status = {"error": str(e)}
+        
+        # Try to create memory manager
+        try:
+            from llm.client import LLMClient
+            client = LLMClient(config)
+            memory = client.get_memory_manager("test-tenant")
+            memory_status = {
+                "memory_manager_created": memory is not None,
+                "memory_manager_type": type(memory).__name__ if memory else None
+            }
+        except Exception as e:
+            memory_status = {"error": str(e)}
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "environment_variables": env_status,
+            "llm_config": config_status,
+            "memory_manager": memory_status,
+            "status": "ok"
+        }
+    except Exception as e:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "status": "error"
+        }
+
+
+@app.post("/test/conversation-with-memory")
+async def test_conversation_memory(request: Request):
+    """Test endpoint to simulate conversation with memory - REAL WORLD TEST"""
+    try:
+        # Parse request body
+        try:
+            body = await request.json()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+        
+        # Validate required fields
+        if "message" not in body:
+            raise HTTPException(status_code=422, detail="Missing required field: message")
+        
+        message = body.get("message", "").strip()
+        user_id = body.get("user_id", "test-user")
+        tenant_id = body.get("tenant_id", "test-tenant")
+        
+        # Validate message is not empty
+        if not message:
+            raise HTTPException(status_code=400, detail="message cannot be empty")
+        
+        # Validate tenant_id and user_id
+        if not tenant_id or not isinstance(tenant_id, str):
+            raise HTTPException(status_code=400, detail="tenant_id must be a non-empty string")
+        
+        if not user_id or not isinstance(user_id, str):
+            raise HTTPException(status_code=400, detail="user_id must be a non-empty string")
+        
+        logger.info(f"🧪 TEST: Conversation with memory - User: {user_id}, Message: {message}")
+        
+        from llm.client import LLMClient
+        from llm.config import LLMConfig
+        
+        config = LLMConfig()
+        client = LLMClient(config)
+        
+        # Generate response with memory
+        logger.info(f"📝 Generating response with memory for tenant: {tenant_id}")
+        response = await client.generate_with_memory(
+            prompt=message,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            use_memory=True
+        )
+        
+        logger.info(f"✅ Response generated: {response[:100]}...")
+        
+        return {
+            "status": "success",
+            "user_message": message,
+            "assistant_response": response,
+            "memory_used": True,
+            "tenant_id": tenant_id,
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (validation errors)
+        raise
+    except Exception as e:
+        logger.error(f"❌ Test conversation error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/trigger-reminder/{user_id}")
 async def trigger_manual_reminder(user_id: str):
     """Trigger manual timesheet reminder for specific user"""
@@ -1166,27 +1311,9 @@ async def handle_sms_webhook(request: Request, From: str = Form(...), Body: str 
             metadata={"from": From, "message_sid": MessageSid}
         )
         
-        # Load conversation history from Supabase
+        # Note: Conversation history/memory is now loaded by Mem0 in the workflow
+        # No need to load from Supabase here - workflow will retrieve semantic memory
         conversation_history = []
-        try:
-            if unified_worker.supabase_client and user_id:
-                logger.info(f"📚 Loading conversation history for {user_id}")
-                history_result = unified_worker.supabase_client.table('conversations')\
-                    .select('message_type, content, created_at')\
-                    .eq('user_id', user_id)\
-                    .order('created_at', desc=True)\
-                    .limit(10)\
-                    .execute()
-                
-                if history_result.data:
-                    # Reverse to get chronological order (oldest first)
-                    conversation_history = list(reversed(history_result.data))
-                    logger.info(f"✅ Loaded {len(conversation_history)} conversation messages")
-                else:
-                    logger.info(f"📝 No conversation history found for {user_id}")
-        except Exception as e:
-            logger.error(f"⚠️ Failed to load conversation history: {e}")
-            conversation_history = []
         
         # Start multi-agent conversation workflow (REPLACED single agent system)
         logger.info(f"🔍 DEBUG: About to start workflow, temporal_client exists: {server.temporal_client is not None}")

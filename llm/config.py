@@ -335,3 +335,103 @@ class LLMConfig(BaseSettings):
         # Validate retry config
         if self.retry_min_wait_seconds >= self.retry_max_wait_seconds:
             raise ValueError("retry_min_wait_seconds must be < retry_max_wait_seconds")
+    
+    # ==========================================
+    # RAG (Retrieval-Augmented Generation) Configuration
+    # ==========================================
+    
+    rag_enabled: bool = Field(
+        default=False,
+        description="Enable RAG (Retrieval-Augmented Generation) with vector store"
+    )
+    
+    # Vector Database Configuration
+    vector_db_provider: str = Field(
+        default="pinecone",
+        description="Vector database provider (pinecone, weaviate, qdrant)"
+    )
+    pinecone_api_key: Optional[str] = Field(
+        default=None,
+        description="Pinecone API key"
+    )
+    pinecone_environment: str = Field(
+        default="us-east-1-aws",
+        description="Pinecone environment"
+    )
+    pinecone_index_name: str = Field(
+        default="timesheet-memory",
+        description="Pinecone index name"
+    )
+    
+    # Qdrant Configuration
+    qdrant_url: Optional[str] = Field(
+        default=None,
+        description="Qdrant server URL (e.g., http://localhost:6333 or cloud URL)"
+    )
+    qdrant_api_key: Optional[str] = Field(
+        default=None,
+        description="Qdrant API key (for cloud deployment)"
+    )
+    qdrant_collection_name: str = Field(
+        default="timesheet_memory",
+        description="Qdrant collection name"
+    )
+    
+    # Weaviate Configuration
+    weaviate_url: Optional[str] = Field(
+        default=None,
+        description="Weaviate server URL (e.g., http://localhost:8080)"
+    )
+    weaviate_api_key: Optional[str] = Field(
+        default=None,
+        description="Weaviate API key (if authentication enabled)"
+    )
+    
+    # Embeddings Configuration
+    embeddings_provider: str = Field(
+        default="openai",
+        description="Embeddings provider (openai, cohere, huggingface)"
+    )
+    embeddings_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embeddings model name"
+    )
+    embeddings_dimension: int = Field(
+        default=1536,
+        description="Embedding vector dimension"
+    )
+    
+    # Memory Retrieval Configuration
+    memory_retrieval_k: int = Field(
+        default=5,
+        gt=0,
+        description="Number of relevant memories to retrieve"
+    )
+    memory_retrieval_method: str = Field(
+        default="mmr",
+        description="Retrieval method (similarity, mmr, similarity_score_threshold)"
+    )
+    memory_mmr_diversity: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="MMR diversity parameter (0=diverse, 1=relevant)"
+    )
+    
+    # ==========================================
+    # Tool Registry Configuration
+    # ==========================================
+    
+    tool_registry_enabled: bool = Field(
+        default=False,
+        description="Enable unified tool registry"
+    )
+    tool_registry_cache_ttl: int = Field(
+        default=3600,
+        gt=0,
+        description="Tool registry cache TTL in seconds"
+    )
+    tool_credentials_encryption_key: Optional[str] = Field(
+        default=None,
+        description="Fernet encryption key for tool credentials"
+    )

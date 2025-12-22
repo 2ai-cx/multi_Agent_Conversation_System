@@ -1,0 +1,65 @@
+# Core Dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Temporal
+temporalio==1.5.0
+
+# Database
+supabase==2.0.3
+
+# LLM & AI  
+# Compatible versions: mem0ai requires openai>=1.90.0, langchain-openai 0.3.0 requires openai>=1.58.1
+openai==1.109.1
+protobuf==5.29.3  # Required by mem0ai and temporalio
+langchain==0.3.15
+langchain-openai==0.3.0  # Compatible with langchain-core 0.3.x
+langchain-core==0.3.31  # Required by langchain 0.3.15
+
+# NEW: Vector Database & RAG (Optional - only if RAG_ENABLED=true)
+# Mem0 - Self-improving memory layer for LLMs with Qdrant support
+mem0ai==1.0.1
+
+# Alternative: Pinecone (managed cloud)
+# pinecone-client==2.2.4
+# langchain-pinecone==0.0.1
+
+# Alternative: Weaviate (open source, self-hosted)
+# langchain-weaviate==0.0.1
+
+# Azure
+azure-identity==1.15.0
+azure-keyvault-secrets==4.7.0
+
+# Twilio (SMS/WhatsApp)
+twilio==8.10.0
+
+# Email
+aiosmtplib==3.0.1
+
+# Data Validation
+pydantic>=2.7.3
+pydantic-settings>=2.1.0
+
+# YAML
+pyyaml==6.0.1
+
+# Observability (Optional)
+opik==1.9.50
+litellm==1.79.2  # Compatible with openai 1.x
+
+# Rate Limiting (Optional)
+pyrate-limiter==3.1.1
+
+# Redis (Optional)
+redis==5.0.1
+aioredis==2.0.1
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+
+# Development
+python-dotenv==1.0.0

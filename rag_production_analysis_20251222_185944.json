@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-12-22T18:59:44.053892",
+  "metrics": {
+    "total_workflows": 0,
+    "total_storage_events": 0,
+    "total_retrieval_events": 0,
+    "total_extracted_memories": 0,
+    "retrieval_success_rate": 0,
+    "avg_memories_retrieved": 0,
+    "storage_per_workflow": 0
+  },
+  "events": {
+    "storage_count": 0,
+    "retrieval_count": 0,
+    "extracted_count": 0
+  }
+}
