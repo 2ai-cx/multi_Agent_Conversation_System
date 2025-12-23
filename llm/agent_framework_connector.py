@@ -43,19 +43,18 @@ class CustomAgentFrameworkLLM(BaseChatClient):
         self.tenant_id = tenant_id
         self.config = config
     
-    async def create(
+    async def _inner_get_response(
         self,
         messages: List[ChatMessage],
-        context: ChatContext,
         **kwargs
     ) -> ChatResponse:
         """
-        Create chat response using custom LLM client.
+        Internal method to get chat response using custom LLM client.
+        Required by BaseChatClient abstract class.
         
         Args:
-            messages: List of chat messages
-            context: Chat context
-            **kwargs: Additional arguments
+            messages: List of chat messages or message strings
+            **kwargs: Additional arguments (temperature, max_tokens, etc.)
             
         Returns:
             ChatResponse object
@@ -64,16 +63,24 @@ class CustomAgentFrameworkLLM(BaseChatClient):
             # Convert Agent Framework messages to our format
             formatted_messages = []
             for msg in messages:
-                formatted_messages.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
+                if isinstance(msg, str):
+                    formatted_messages.append({
+                        "role": "user",
+                        "content": msg
+                    })
+                else:
+                    # ChatMessage has 'text' property for text content
+                    content_text = msg.text if hasattr(msg, 'text') else str(msg.contents)
+                    formatted_messages.append({
+                        "role": msg.role,
+                        "content": content_text
+                    })
             
             # Use custom client to generate
             response_text = await self.custom_client.generate_async(
                 messages=formatted_messages,
                 tenant_id=kwargs.get("tenant_id", self.tenant_id),
-                temperature=self.config.temperature
+                temperature=kwargs.get("temperature", self.config.temperature)
             )
             
             # Convert response to Agent Framework format
@@ -87,28 +94,27 @@ class CustomAgentFrameworkLLM(BaseChatClient):
                 ]
             )
             
-            logger.info(f"✅ Agent Framework chat completion successful")
+            logger.info(f"✅ Agent Framework chat response successful")
             return response
             
         except Exception as e:
             logger.error(f"❌ Agent Framework chat error: {e}")
             raise
     
-    async def create_stream(
+    async def _inner_get_streaming_response(
         self,
         messages: List[ChatMessage],
-        context: ChatContext,
         **kwargs
     ) -> AsyncIterator[ChatResponse]:
         """
-        Create streaming chat response.
+        Internal method to get streaming chat response.
+        Required by BaseChatClient abstract class.
         
         Note: Custom client doesn't support streaming yet,
         so this returns a single response.
         """
-        response = await self.create(
+        response = await self._inner_get_response(
             messages=messages,
-            context=context,
             **kwargs
         )
         yield response

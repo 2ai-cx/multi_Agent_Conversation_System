@@ -44,7 +44,7 @@ class ProductionMiddleware:
         
         self.metrics["agent_calls"] += 1
     
-    async def on_agent_end(self, context: AgentContext, result: Any) -> None:
+    async def on_agent_end(self, context: Any, result: Any) -> None:
         """Called when agent ends running"""
         run_id = id(context)
         start_time = self.start_times.pop(f"agent_{run_id}", time.time())
@@ -76,7 +76,7 @@ class ProductionMiddleware:
         
         self.metrics["tool_calls"] += 1
     
-    async def on_tool_end(self, context: AgentContext, tool_call: ToolCall, result: Any) -> None:
+    async def on_tool_end(self, context: Any, tool_call: Any, result: Any) -> None:
         """Called when tool ends running"""
         run_id = id(tool_call)
         start_time = self.start_times.pop(f"tool_{run_id}", time.time())
@@ -142,7 +142,7 @@ class AzureInsightsMiddleware:
             except ImportError:
                 logger.warning("applicationinsights package not installed, metrics will only be logged")
     
-    async def on_agent_end(self, context: AgentContext, result: Any) -> None:
+    async def on_agent_end(self, context: Any, result: Any) -> None:
         """Track agent completion to Azure"""
         if not self.telemetry_client:
             return
@@ -156,7 +156,7 @@ class AzureInsightsMiddleware:
             }
         )
     
-    async def on_tool_end(self, context: AgentContext, tool_call: ToolCall, result: Any) -> None:
+    async def on_tool_end(self, context: Any, tool_call: Any, result: Any) -> None:
         """Track tool call to Azure"""
         if not self.telemetry_client:
             return

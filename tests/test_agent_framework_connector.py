@@ -54,33 +54,34 @@ class TestCustomAgentFrameworkLLM:
     
     @pytest.mark.asyncio
     @patch('llm.agent_framework_connector.LLMClient')
-    async def test_create_chat_completion(self, mock_client_class, mock_config, mock_llm_client):
-        """Test chat completion creation"""
+    async def test_get_response(self, mock_client_class, mock_config, mock_llm_client):
+        """Test chat response generation"""
         mock_client_class.return_value = mock_llm_client
         
         llm = CustomAgentFrameworkLLM(config=mock_config, tenant_id="test-tenant")
         llm.custom_client = mock_llm_client
         
         # Create mock messages
-        from agent_framework.core import ChatMessage
+        from agent_framework import ChatMessage
         messages = [
             ChatMessage(role="user", content="Test message")
         ]
         
-        # This will fail because ChatMessage doesn't exist yet
-        # We'll mock the response instead
         mock_llm_client.generate_async.return_value = "Test response"
         
-        # For now, just test that the method exists
-        assert hasattr(llm, 'create_chat_completion')
+        response = await llm.get_response(messages)
+        
+        assert response is not None
+        assert len(response.messages) > 0
+        mock_llm_client.generate_async.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_create_chat_completion_stream(self, mock_config):
-        """Test streaming chat completion"""
+    async def test_get_streaming_response(self, mock_config):
+        """Test streaming chat response"""
         llm = CustomAgentFrameworkLLM(config=mock_config)
         
         # Test that streaming method exists
-        assert hasattr(llm, 'create_chat_completion_stream')
+        assert hasattr(llm, 'get_streaming_response')
     
     def test_model_info(self, mock_config):
         """Test model info property"""
