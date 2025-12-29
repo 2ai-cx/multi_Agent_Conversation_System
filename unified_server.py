@@ -371,14 +371,14 @@ class UnifiedTemporalServer:
                 schedule_id,
                 Schedule(
                     spec=ScheduleSpec(
-                        # Timezone-aware cron: 8 AM Sydney time, Monday-Friday
-                        # CRON_TZ prefix tells Temporal to interpret time in specified timezone
-                        cron_expressions=["CRON_TZ=Australia/Sydney 0 8 * * MON-FRI"]
+                        # 8 AM Sydney time, Monday-Friday
+                        cron_expressions=["0 8 * * MON-FRI"],
+                        timezone="Australia/Sydney"
                     ),
                     action=ScheduleActionStartWorkflow(
                         DailyReminderScheduleWorkflow.run,
                         args=[users_config],
-                        id=f"daily_reminders_{datetime.utcnow().strftime('%Y%m%d')}",  # FIXED: Use UTC time
+                        id=f"daily_reminders_{datetime.utcnow().strftime('%Y%m%d')}",
                         task_queue="timesheet-reminders"
                     )
                 )
@@ -1152,6 +1152,49 @@ async def trigger_manual_reminder(user_id: str):
         logger.error(f"❌ Failed to trigger manual reminder for {user_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/recreate-schedule")
+async def recreate_schedule():
+    """Delete and recreate the daily timesheet reminder schedule with correct timezone config"""
+    try:
+        if not hasattr(server, 'temporal_client') or server.temporal_client is None:
+            raise HTTPException(status_code=500, detail="Temporal client not initialized")
+        
+        schedule_id = "daily-timesheet-reminders"
+        result = {
+            "schedule_deleted": False,
+            "schedule_created": False,
+            "error": None
+        }
+        
+        # Delete existing schedule
+        try:
+            schedule_handle = server.temporal_client.get_schedule_handle(schedule_id)
+            await schedule_handle.delete()
+            result["schedule_deleted"] = True
+            logger.info(f"✅ Deleted old schedule: {schedule_id}")
+        except Exception as e:
+            if "not found" not in str(e).lower():
+                result["error"] = f"Failed to delete schedule: {str(e)}"
+                logger.error(f"❌ Failed to delete schedule: {e}")
+                return result
+            else:
+                logger.info(f"⚠️ Schedule {schedule_id} not found, will create new one")
+        
+        # Recreate schedule with correct timezone config
+        try:
+            await server._setup_temporal_schedules()
+            result["schedule_created"] = True
+            logger.info(f"✅ Recreated schedule: {schedule_id}")
+        except Exception as e:
+            result["error"] = f"Failed to create schedule: {str(e)}"
+            logger.error(f"❌ Failed to create schedule: {e}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to recreate schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/cleanup-old-workflows")
 async def cleanup_old_workflows():
     """Clean up old Temporal workflows and schedules"""
@@ -1599,36 +1642,42 @@ async def get_recent_actions(limit: int = 20):
 async def startup_event():
     """Initialize Temporal client and worker on startup"""
     logger.info("🔥 STARTUP EVENT TRIGGERED - Beginning initialization...")
-    try:
-        logger.info("🚀 Starting Unified Temporal Worker...")
-        
-        # Initialize Temporal client
-        logger.info("🔗 Initializing Temporal client...")
-        await server.initialize_temporal_client()
-        logger.info("✅ Temporal client initialized")
-        
-        # Start worker in background
-        logger.info("🚀 Creating Temporal worker background task...")
-        temporal_task = asyncio.create_task(server.start_temporal_worker())
-        logger.info("✅ Temporal worker task created")
-        
-        # Start email polling in background
-        logger.info("📧 Creating Gmail polling background task...")
-        email_task = asyncio.create_task(server.start_email_polling())
-        logger.info("✅ Gmail polling task created")
-        
-        # Log task status
-        logger.info(f"📊 Background tasks status:")
-        logger.info(f"   Temporal worker task: {temporal_task}")
-        logger.info(f"   Gmail polling task: {email_task}")
-        
-        logger.info("✅ Unified Temporal Worker startup complete")
-        
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-        import traceback
-        logger.error(f"❌ Startup traceback: {traceback.format_exc()}")
-        # Don't raise - allow server to start for health checks
+    
+    async def initialize_background_services():
+        """Initialize Temporal and other services in background without blocking startup"""
+        try:
+            logger.info("🚀 Starting Unified Temporal Worker...")
+            
+            # Initialize Temporal client
+            logger.info("🔗 Initializing Temporal client...")
+            await server.initialize_temporal_client()
+            logger.info("✅ Temporal client initialized")
+            
+            # Start worker in background
+            logger.info("🚀 Creating Temporal worker background task...")
+            temporal_task = asyncio.create_task(server.start_temporal_worker())
+            logger.info("✅ Temporal worker task created")
+            
+            # Start email polling in background
+            logger.info("📧 Creating Gmail polling background task...")
+            email_task = asyncio.create_task(server.start_email_polling())
+            logger.info("✅ Gmail polling task created")
+            
+            # Log task status
+            logger.info(f"📊 Background tasks status:")
+            logger.info(f"   Temporal worker task: {temporal_task}")
+            logger.info(f"   Gmail polling task: {email_task}")
+            
+            logger.info("✅ Unified Temporal Worker startup complete")
+            
+        except Exception as e:
+            logger.error(f"❌ Background services initialization failed: {e}")
+            import traceback
+            logger.error(f"❌ Initialization traceback: {traceback.format_exc()}")
+    
+    # Start initialization in background without blocking startup
+    asyncio.create_task(initialize_background_services())
+    logger.info("✅ Startup event complete - background services initializing...")
 
 if __name__ == "__main__":
     # Determine port based on environment

@@ -59,19 +59,25 @@ class OpikTracker:
                 import opik
                 from opik import Opik
                 
-                # Initialize Opik client
-                if self.config.opik_api_key:
-                    self._opik_client = Opik(
-                        api_key=self.config.opik_api_key,
-                        project_name=self.config.opik_project_name
-                    )
-                else:
-                    # Use default configuration (local or environment)
-                    self._opik_client = Opik(
-                        project_name=self.config.opik_project_name
-                    )
+                # Initialize Opik client with optional parameters
+                init_params = {
+                    "project_name": self.config.opik_project_name
+                }
                 
-                logger.info(f"Opik client initialized for project: {self.config.opik_project_name}")
+                # Add optional parameters if provided
+                if self.config.opik_api_key:
+                    init_params["api_key"] = self.config.opik_api_key
+                
+                if self.config.opik_workspace:
+                    init_params["workspace"] = self.config.opik_workspace
+                
+                self._opik_client = Opik(**init_params)
+                
+                logger.info(
+                    f"Opik client initialized - "
+                    f"project: {self.config.opik_project_name}, "
+                    f"workspace: {self.config.opik_workspace or 'default'}"
+                )
             
             except ImportError:
                 logger.warning(

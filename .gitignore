@@ -84,3 +84,13 @@ cython_debug/
 *.bak
 *.swp
 .cache/
+
+# Markdown temporary and backup files (speckit best practices)
+*.md.tmp
+*.md.bak
+*.md~
+.specify/memory/*.draft.md
+
+# AI-generated temporary analysis files
+*_ANALYSIS_TEMP.md
+*_DRAFT.md

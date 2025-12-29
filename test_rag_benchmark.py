@@ -30,7 +30,12 @@ class RAGBenchmark:
     def __init__(self, tenant_id: str = "benchmark_test"):
         self.tenant_id = tenant_id
         self.user_id = "test_user"
-        self.config = LLMConfig()
+        
+        # Enable RAG for benchmark with local Qdrant
+        self.config = LLMConfig(
+            rag_enabled=True,
+            qdrant_url="http://localhost:6333"
+        )
         
         # Ensure OpenAI API key is set for Mem0 embeddings
         if not os.getenv('OPENAI_API_KEY') and self.config.openai_api_key:

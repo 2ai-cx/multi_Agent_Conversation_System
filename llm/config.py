@@ -177,6 +177,10 @@ class LLMConfig(BaseSettings):
         default="unified-temporal-worker",
         description="Opik project name"
     )
+    opik_workspace: Optional[str] = Field(
+        default=None,
+        description="Opik workspace name"
+    )
     opik_api_key: Optional[str] = Field(
         default=None,
         description="Opik API key (if using cloud)"
@@ -403,9 +407,9 @@ class LLMConfig(BaseSettings):
     
     # Memory Retrieval Configuration
     memory_retrieval_k: int = Field(
-        default=5,
+        default=10,
         gt=0,
-        description="Number of relevant memories to retrieve"
+        description="Number of relevant memories to retrieve (increased from 5 to improve recall)"
     )
     memory_retrieval_method: str = Field(
         default="mmr",

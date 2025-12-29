@@ -1,0 +1,323 @@
+{
+  "timestamp": "2025-12-23T22:25:05.062473",
+  "tenant_id": "benchmark_test",
+  "user_id": "test_user",
+  "total_test_cases": 5,
+  "total_queries": 10,
+  "total_passed": 10,
+  "total_failed": 0,
+  "overall_pass_rate": 1.0,
+  "overall_precision": 0.9333333333333332,
+  "overall_recall": 0.9333333333333332,
+  "test_results": [
+    {
+      "name": "Basic Fact Retrieval",
+      "total_queries": 3,
+      "passed_queries": 3,
+      "failed_queries": 0,
+      "pass_rate": 1.0,
+      "avg_precision": 1.0,
+      "avg_recall": 1.0,
+      "query_results": [
+        {
+          "query": "where do I work?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.35] The user works as a software engineer at google",
+            "[Relevance: 0.32] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.25] The user working on the authentication project",
+            "[Relevance: 0.24] The user wants to improve time management",
+            "[Relevance: 0.23] The user manager's name is sarah chen"
+          ],
+          "expected_keywords": [
+            "Google",
+            "software engineer"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.7,
+          "found_keywords": [
+            "software engineer",
+            "Google"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        },
+        {
+          "query": "who is my manager?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.52] The user manager's name is sarah chen",
+            "[Relevance: 0.29] The user wants to improve time management",
+            "[Relevance: 0.26] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.23] The user works as a software engineer at google",
+            "[Relevance: 0.22] The user has 5 years of experience in backend development"
+          ],
+          "expected_keywords": [
+            "Sarah Chen",
+            "manager"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.7,
+          "found_keywords": [
+            "manager",
+            "Sarah Chen"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        },
+        {
+          "query": "what project am I on?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.42] The user working on the authentication project",
+            "[Relevance: 0.30] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.28] The user manager's name is sarah chen",
+            "[Relevance: 0.28] The user works as a software engineer at google",
+            "[Relevance: 0.27] The user has 5 years of experience in backend development"
+          ],
+          "expected_keywords": [
+            "authentication",
+            "project"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.7,
+          "found_keywords": [
+            "project",
+            "authentication"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "Timesheet Context",
+      "total_queries": 2,
+      "passed_queries": 2,
+      "failed_queries": 0,
+      "pass_rate": 1.0,
+      "avg_precision": 0.8333333333333333,
+      "avg_recall": 0.8333333333333333,
+      "query_results": [
+        {
+          "query": "how many hours did I work yesterday?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.56] The user worked 8 hours yesterday on bug fixes",
+            "[Relevance: 0.35] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.32] The user works monday to friday",
+            "[Relevance: 0.26] The user took vacation last week",
+            "[Relevance: 0.22] The user works as a software engineer at google"
+          ],
+          "expected_keywords": [
+            "8 hours",
+            "yesterday",
+            "bug fixes"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.7,
+          "found_keywords": [
+            "yesterday",
+            "8 hours",
+            "bug fixes"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        },
+        {
+          "query": "what's my work schedule?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.47] The user works monday to friday",
+            "[Relevance: 0.36] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.34] The user worked 8 hours yesterday on bug fixes",
+            "[Relevance: 0.34] The user wants to improve time management",
+            "[Relevance: 0.32] The user took vacation last week"
+          ],
+          "expected_keywords": [
+            "Monday",
+            "Friday",
+            "schedule"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.6,
+          "found_keywords": [
+            "Friday",
+            "Monday"
+          ],
+          "found_unexpected": [],
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "Multi-Fact Retrieval",
+      "total_queries": 2,
+      "passed_queries": 2,
+      "failed_queries": 0,
+      "pass_rate": 1.0,
+      "avg_precision": 1.0,
+      "avg_recall": 1.0,
+      "query_results": [
+        {
+          "query": "what programming languages do I know?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.38] The user prefers python over javascript",
+            "[Relevance: 0.35] The user has 5 years of experience in backend development",
+            "[Relevance: 0.32] The user learning rust in free time",
+            "[Relevance: 0.31] The user works as a software engineer at google",
+            "[Relevance: 0.17] The user worked 8 hours yesterday on bug fixes"
+          ],
+          "expected_keywords": [
+            "Python",
+            "JavaScript",
+            "Rust"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.6,
+          "found_keywords": [
+            "JavaScript",
+            "Python",
+            "Rust"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        },
+        {
+          "query": "how experienced am I?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.42] The user has 5 years of experience in backend development",
+            "[Relevance: 0.26] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.25] The user wants to improve time management",
+            "[Relevance: 0.24] The user works as a software engineer at google",
+            "[Relevance: 0.23] The user learning rust in free time"
+          ],
+          "expected_keywords": [
+            "5 years",
+            "experience",
+            "backend"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.6,
+          "found_keywords": [
+            "experience",
+            "backend",
+            "5 years"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "Semantic Similarity",
+      "total_queries": 2,
+      "passed_queries": 2,
+      "failed_queries": 0,
+      "pass_rate": 1.0,
+      "avg_precision": 0.8333333333333333,
+      "avg_recall": 0.8333333333333333,
+      "query_results": [
+        {
+          "query": "am I stressed?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.43] The user feeling overwhelmed with work lately",
+            "[Relevance: 0.24] The user wants to improve time management",
+            "[Relevance: 0.19] The user took vacation last week",
+            "[Relevance: 0.16] The user worked 8 hours yesterday on bug fixes",
+            "[Relevance: 0.14] The user learning rust in free time"
+          ],
+          "expected_keywords": [
+            "overwhelmed",
+            "work",
+            "heavy workload"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.5,
+          "found_keywords": [
+            "work",
+            "overwhelmed"
+          ],
+          "found_unexpected": [],
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "passed": true
+        },
+        {
+          "query": "what skills do I want to develop?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.41] The user wants to improve time management",
+            "[Relevance: 0.32] The user has 5 years of experience in backend development",
+            "[Relevance: 0.31] The user learning rust in free time",
+            "[Relevance: 0.29] The user works as a software engineer at google",
+            "[Relevance: 0.25] The user working on the authentication project"
+          ],
+          "expected_keywords": [
+            "time management",
+            "improve"
+          ],
+          "unexpected_keywords": [],
+          "min_relevance": 0.5,
+          "found_keywords": [
+            "improve",
+            "time management"
+          ],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "Negative Cases (Should NOT Retrieve)",
+      "total_queries": 1,
+      "passed_queries": 1,
+      "failed_queries": 0,
+      "pass_rate": 1.0,
+      "avg_precision": 1.0,
+      "avg_recall": 1.0,
+      "query_results": [
+        {
+          "query": "do I work at Microsoft?",
+          "retrieved_count": 5,
+          "retrieved_memories": [
+            "[Relevance: 0.42] The user works as a software engineer at google",
+            "[Relevance: 0.29] The user has 5 years of experience in backend development",
+            "[Relevance: 0.27] The user works monday to friday",
+            "[Relevance: 0.26] The user manager's name is sarah chen",
+            "[Relevance: 0.25] The user feeling overwhelmed with work lately"
+          ],
+          "expected_keywords": [],
+          "unexpected_keywords": [
+            "Microsoft"
+          ],
+          "min_relevance": 0.0,
+          "found_keywords": [],
+          "found_unexpected": [],
+          "precision": 1.0,
+          "recall": 1.0,
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

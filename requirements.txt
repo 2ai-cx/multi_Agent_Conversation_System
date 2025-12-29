@@ -7,7 +7,7 @@ python-multipart==0.0.6
 temporalio==1.5.0
 
 # Database
-supabase==2.0.3
+supabase==2.10.0  # Upgraded for httpx>=0.25.0 compatibility with Opik
 
 # LLM & AI  
 # Compatible versions: mem0ai requires openai>=1.90.0, langchain-openai 0.3.0 requires openai>=1.58.1
@@ -47,6 +47,7 @@ pyyaml==6.0.1
 
 # Observability (Optional)
 opik==1.9.50
+httpx>=0.25.0  # Required by opik for proxy support
 litellm==1.79.2  # Compatible with openai 1.x
 
 # Rate Limiting (Optional)

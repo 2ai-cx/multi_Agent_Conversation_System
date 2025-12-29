@@ -188,16 +188,25 @@ async def get_timesheet_data(request: TimesheetReminderRequest) -> Dict[str, Any
             logger.error(f"❌ Missing Harvest credentials for {request.user_name}: account={harvest_account}, token={'***' if harvest_token else None}")
             raise Exception(f"Missing Harvest credentials for {request.user_name}")
         
-        # Calculate current week date range in user's timezone
+        # Calculate last 7 working days in user's timezone
         from zoneinfo import ZoneInfo
         
         # Get current time in user's timezone
         user_tz = ZoneInfo(user_timezone)
         today = datetime.now(user_tz)
         
-        # Calculate week start (Monday) and end (Sunday) in user's timezone
-        week_start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
-        week_end = (today + timedelta(days=6-today.weekday())).strftime('%Y-%m-%d')
+        # Calculate last 7 working days (excluding weekends)
+        working_days = []
+        current_date = today
+        while len(working_days) < 7:
+            # 0 = Monday, 6 = Sunday
+            if current_date.weekday() < 5:  # Monday to Friday
+                working_days.append(current_date)
+            current_date = current_date - timedelta(days=1)
+        
+        # Get the earliest and latest working days
+        week_start = working_days[-1].strftime('%Y-%m-%d')  # Oldest working day
+        week_end = working_days[0].strftime('%Y-%m-%d')  # Most recent working day (today if weekday)
         
         # Call Harvest MCP (Smart Routing: Direct internal, KrakenD for external)
         use_direct_internal = os.getenv('USE_DIRECT_INTERNAL_CALLS', 'true').lower() == 'true'
@@ -244,7 +253,8 @@ async def get_timesheet_data(request: TimesheetReminderRequest) -> Dict[str, Any
                 "week_end": week_end,
                 "time_entries": time_entries,
                 "user_full_name": user_data.get('full_name', request.user_name),  
-                "timezone": user_timezone  
+                "timezone": user_timezone,
+                "period_label": "Last 7 Working Days"
             }
         else:
             logger.error(f"❌ MCP API error: HTTP {response.status_code} - {response.text}")
@@ -459,7 +469,8 @@ class TimesheetReminderWorkflow:
                     'target_hours': target_hours,
                     'entries_count': entries_count,
                     'time_entries': time_entries,
-                    'timezone': timesheet_data.get('timezone', 'UTC')  # Include timezone
+                    'timezone': timesheet_data.get('timezone', 'UTC'),  # Include timezone
+                    'period_label': timesheet_data.get('period_label', 'Week')  # Include period label
                 }
                 
                 # Use unified formatter for consistent messaging
@@ -531,13 +542,15 @@ class DailyReminderScheduleWorkflow:
     
     @workflow.run
     async def run(self, users_config: List[Dict[str, str]]) -> Dict[str, Any]:
-        """Execute daily reminders for all configured users (FIXED: match original structure)"""
+        """Execute daily reminders for all configured users - only if they have 3 or fewer days entered"""
         workflow.logger.info("🔔 Starting daily reminder schedule workflow")
         
         results = []
+        skipped_users = []
+        
         for user in users_config:
             try:
-                # Create reminder request (FIXED: include endpoint field)
+                # Create reminder request to check timesheet data first
                 reminder_request = TimesheetReminderRequest(
                     user_id=user['user_id'],
                     user_name=user['name'],
@@ -547,16 +560,56 @@ class DailyReminderScheduleWorkflow:
                     endpoint=user.get('endpoint', f"/check-timesheet-{user['user_id']}")
                 )
                 
-                # Execute as child workflow for parallel processing (FIXED: use workflow.now())
-                workflow_id = f"reminder_{user['user_id']}_{workflow.now().strftime('%Y%m%d')}"
-                result = await workflow.execute_child_workflow(
-                    TimesheetReminderWorkflow.run,
+                # Step 1: Get timesheet data to check entry count
+                timesheet_data = await workflow.execute_activity(
+                    get_timesheet_data,
                     reminder_request,
-                    id=workflow_id,
-                    task_queue="timesheet-reminders"
+                    start_to_close_timeout=timedelta(seconds=60),
+                    retry_policy=RetryPolicy(maximum_attempts=3)
                 )
                 
-                results.append(result.__dict__)
+                # Step 2: Count unique days with entries
+                if timesheet_data.get('source') == 'harvest_mcp_direct':
+                    time_entries = timesheet_data.get('time_entries', [])
+                    # Count unique dates that have time entries
+                    unique_days = set()
+                    for entry in time_entries:
+                        spent_date = entry.get('spent_date')
+                        if spent_date:
+                            unique_days.add(spent_date)
+                    
+                    days_entered = len(unique_days)
+                    workflow.logger.info(f"📊 {user['name']}: {days_entered} days with entries out of last 7 working days")
+                    
+                    # Step 3: Only send reminder if 3 or fewer days entered
+                    if days_entered <= 3:
+                        workflow.logger.info(f"📤 Sending reminder to {user['name']} ({days_entered}/7 days entered)")
+                        workflow_id = f"reminder_{user['user_id']}_{workflow.now().strftime('%Y%m%d')}"
+                        result = await workflow.execute_child_workflow(
+                            TimesheetReminderWorkflow.run,
+                            reminder_request,
+                            id=workflow_id,
+                            task_queue="timesheet-reminders"
+                        )
+                        results.append(result.__dict__)
+                    else:
+                        workflow.logger.info(f"⏭️ Skipping reminder for {user['name']} ({days_entered}/7 days entered - sufficient)")
+                        skipped_users.append({
+                            "user": user['name'],
+                            "days_entered": days_entered,
+                            "reason": "sufficient_entries"
+                        })
+                else:
+                    # If we can't get timesheet data, send reminder anyway (fail-safe)
+                    workflow.logger.warning(f"⚠️ Could not check timesheet for {user['name']}, sending reminder anyway")
+                    workflow_id = f"reminder_{user['user_id']}_{workflow.now().strftime('%Y%m%d')}"
+                    result = await workflow.execute_child_workflow(
+                        TimesheetReminderWorkflow.run,
+                        reminder_request,
+                        id=workflow_id,
+                        task_queue="timesheet-reminders"
+                    )
+                    results.append(result.__dict__)
                 
             except Exception as e:
                 workflow.logger.error(f"❌ Failed reminder workflow for {user['name']}: {e}")
@@ -569,9 +622,12 @@ class DailyReminderScheduleWorkflow:
         return {
             "status": "completed",
             "total_users": len(users_config),
+            "reminders_sent": len(results),
+            "skipped": len(skipped_users),
             "successful": len([r for r in results if r.get('status') != 'error']),
             "failed": len([r for r in results if r.get('status') == 'error']),
-            "results": results
+            "results": results,
+            "skipped_users": skipped_users
         }
 
 # CONVERSATION ACTIVITIES (from conversation_workflows.py)
@@ -934,8 +990,15 @@ def create_harvest_tools(user_id: str):
             
             # Parse date_range parameter (keep user-friendly date parsing)
             if date_range == "this_week":
-                week_start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
-                week_end = today.strftime('%Y-%m-%d')  # FIX: Use today, not end of week (future)
+                # Calculate last 7 working days (excluding weekends) - consistent with reminders
+                working_days = []
+                current_date = today
+                while len(working_days) < 7:
+                    if current_date.weekday() < 5:  # Monday to Friday
+                        working_days.append(current_date)
+                    current_date = current_date - timedelta(days=1)
+                week_start = working_days[-1].strftime('%Y-%m-%d')  # Oldest working day
+                week_end = working_days[0].strftime('%Y-%m-%d')  # Most recent working day
             elif date_range == "last_week":
                 last_week = today - timedelta(weeks=1)
                 week_start = (last_week - timedelta(days=last_week.weekday())).strftime('%Y-%m-%d')

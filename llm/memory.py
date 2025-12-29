@@ -67,13 +67,25 @@ class LLMMemoryManager:
                 from mem0 import Memory
                 
                 # Configure Mem0 with Qdrant
+                # Parse URL to extract host and port
+                qdrant_url = self.config.qdrant_url
+                url_without_protocol = qdrant_url.replace("http://", "").replace("https://", "")
+                
+                # Extract host and port
+                if ":" in url_without_protocol:
+                    host, port_str = url_without_protocol.split(":", 1)
+                    port = int(port_str.split("/")[0])  # Handle URLs with paths
+                else:
+                    host = url_without_protocol.split("/")[0]
+                    port = 443 if "https://" in qdrant_url else 80
+                
                 mem0_config = {
                     "vector_store": {
                         "provider": "qdrant",
                         "config": {
                             "collection_name": f"mem0_{self.tenant_id}",
-                            "host": self.config.qdrant_url.replace("http://", "").replace("https://", ""),
-                            "port": 80,  # Azure Container Apps HTTP port
+                            "host": host,
+                            "port": port,
                         }
                     }
                 }
@@ -119,10 +131,17 @@ class LLMMemoryManager:
             # If it's a question, store the AI's extracted fact
             memory_text = user_message
             
-            # Add metadata to help with context
+            # Add metadata to help with context and temporal queries
             enhanced_metadata = metadata or {}
             enhanced_metadata["original_message"] = user_message
             enhanced_metadata["ai_response_preview"] = ai_response[:100]
+            enhanced_metadata["timestamp"] = datetime.now().isoformat()
+            
+            # Add temporal keywords for better time-based retrieval
+            temporal_keywords = ["yesterday", "today", "last week", "hours", "worked", "timesheet"]
+            found_keywords = [kw for kw in temporal_keywords if kw in user_message.lower()]
+            if found_keywords:
+                enhanced_metadata["temporal_context"] = ", ".join(found_keywords)
             
             self.memory.add(
                 memory_text,
@@ -160,32 +179,65 @@ class LLMMemoryManager:
             
             user_id = filter.get("user_id", "default") if filter else "default"
             
-            # Search memories using Mem0
-            search_results = self.memory.search(
-                query=query,
-                user_id=f"{self.tenant_id}_{user_id}",
-                limit=k
-            )
+            # Expand query with synonyms and related terms for better semantic matching
+            expanded_queries = [query]
             
-            # Mem0 returns {"results": [...]} format
-            results = search_results.get("results", []) if isinstance(search_results, dict) else search_results
+            # Add query expansions for common patterns
+            query_lower = query.lower()
+            if "project" in query_lower:
+                expanded_queries.append(query + " work assignment task")
+            if "schedule" in query_lower or "when" in query_lower:
+                expanded_queries.append(query + " Monday Tuesday Wednesday Thursday Friday weekend")
+            if "work" in query_lower and "hours" in query_lower:
+                expanded_queries.append(query + " timesheet time entry")
+            
+            # Search with original query first, then expanded if needed
+            all_results = []
+            for expanded_query in expanded_queries:
+                search_results = self.memory.search(
+                    query=expanded_query,
+                    user_id=f"{self.tenant_id}_{user_id}",
+                    limit=k
+                )
+                
+                # Mem0 returns {"results": [...]} format
+                results = search_results.get("results", []) if isinstance(search_results, dict) else search_results
+                all_results.extend(results)
+                
+                # If we got good results (high scores), stop expanding
+                if results and any(r.get("score", 0) > 0.5 for r in results):
+                    break
+            
+            # Deduplicate results by memory text
+            seen_memories = set()
+            unique_results = []
+            for result in all_results:
+                if isinstance(result, dict) and "memory" in result:
+                    memory_text = result["memory"]
+                    if memory_text not in seen_memories:
+                        seen_memories.add(memory_text)
+                        unique_results.append(result)
+            
+            # Sort by score and take top k
+            unique_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+            results = unique_results[:k]
             
             # Extract memory text from results and format for better LLM understanding
             context = []
             for i, result in enumerate(results):
                 if isinstance(result, dict) and "memory" in result:
                     memory_text = result["memory"]
+                    score = result.get("score", 0.0)
                     
-                    # Format memory for better LLM comprehension
-                    # If memory doesn't start with "I" or "The user", add context
+                    # Format memory for better LLM comprehension with explicit context
+                    # Add "The user" prefix for clarity and include relevance score
                     if not memory_text.strip().lower().startswith(("i ", "the user", "user")):
-                        # Add subject for clarity
-                        formatted_memory = f"The user {memory_text.lower()}"
+                        formatted_memory = f"[Relevance: {score:.2f}] The user {memory_text.lower()}"
                     else:
-                        formatted_memory = memory_text
+                        formatted_memory = f"[Relevance: {score:.2f}] {memory_text}"
                     
                     context.append(formatted_memory)
-                    logger.info(f"Extracted memory {i}: {formatted_memory[:100]}...")
+                    logger.info(f"Extracted memory {i} (score={score:.2f}): {formatted_memory[:100]}...")
             
             logger.info(f"Retrieved {len(context)} memories from Mem0")
             return context

@@ -83,16 +83,23 @@ Channel requirements and constraints:
 
 Brand voice: Professional but friendly, clear and helpful
 
+CRITICAL REQUIREMENTS:
+- For timesheet responses: ALWAYS preserve date ranges and time periods (e.g., "Dec 23-29", "Last 7 working days")
+- For timesheet responses: ALWAYS include the specific dates being reported
+- Never remove date information when reformatting
+
 Your task:
 1. Format the response appropriately for {channel_key}
 2. Apply the brand voice
 3. Ensure it meets channel constraints (length, formatting)
 4. If the response is too long for the channel, intelligently truncate or split it
+5. PRESERVE all date ranges and time period information
 
 Think step by step:
 - What formatting is appropriate for this channel?
 - Is the response within length limits?
 - Should I split it into multiple parts?
+- Have I preserved all date/time period information?
 
 Return JSON:
 {{
